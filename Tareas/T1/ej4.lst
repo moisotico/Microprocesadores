@@ -1,0 +1,57 @@
+
+as12, an absolute assembler for Motorola MCU's, version 1.2h
+
+                        ; Moises Campos
+                        ; 11-05-2020
+                        
+1000                    DATOS:		equ             $1000
+1100                    MAYORES:	equ             $1100
+                        
+1000                                    org             $1000
+                                        ; Valores de prueba
+1000 03 42 4a 34 46 2b                  db              3,66,74,52,70,43,70,97
+     46 61
+1008 cd 1c f9 49 19 4c                  db              -51,28,-7,73,25,76,32,-30
+     20 e2
+1010 dc 5a 01 42 3a ef                  db              -36,90,1,66,58,-17,7,-109
+     07 93
+1018 3f b6 17 bb 1c 3f                  db              63,-74,23,-69,28,63,114,88
+     72 58
+1020 36 96 d9 bf 9c 64                  db              54,-106,-39,-65,-100,100
+1026 e5 0a 2e fa 55 07                  db              -27,10,46,-6,85,7,51,-75,-70,-72
+     33 b5 ba b8
+1030 ac 76 ab 1b f2 9f                  db              -84,118,-85,27,-14,-97
+                        
+2000                                    org             $2000
+                        ; Inicialmente se cargan las direcciones de inicio
+                        ; de DATOS y MAYORES respectivamente en indices X y Y.
+2000                    INICIO:
+2000 ce 10 00                           ldx             #DATOS
+2003 cd 11 00                           ldy             #MAYORES
+2006 c7                                 clrb
+                        
+                        ; Se chequea que el numero sea mayor a -50($CE)
+                        ; Si es menor o igual no se copia el dato.
+2007                    LOOP:
+2007 52                                 incb
+2008 a6 30                              ldaa            1,X+
+200a 81 ce                              cmpa            #$CE
+                         
+                        ; Si el dato es mayor que -50, se copia el dato en MAYORES.
+                        ; Ademas se cambia el valor de b para contar MAYORES y se guarda este valor.
+200c 2f 02                              ble             SIGUIENTE_DATO
+200e 6a 70                              staa            1,Y+
+                        
+                        ; Se comprueba la condicion de salida del loop.
+2010                    SIGUIENTE_DATO:
+2010 c1 c8                              cmpb            #$C8
+2012 25 f3                              bcs             LOOP
+                        
+                        ; Fin del programa
+2014                    FIN:
+2014 06 20 14                           jmp             FIN
+                                        end
+
+Executed: Mon May 11 22:46:44 2020
+Total cycles: 21, Total bytes: 77
+Total errors: 0, Total warnings: 0

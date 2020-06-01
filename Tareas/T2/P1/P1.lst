@@ -1,0 +1,209 @@
+
+as12, an absolute assembler for Motorola MCU's, version 1.2h
+
+                        ; Moises Campos Zepeda
+                        ; 25-05-2020
+                        ; IE0623: Microprocesadores
+                        ; Problema # 1
+                        ; Nota: el codigo se comento en ingles
+                        ; *****************************************************************************
+                        ;                           Declaracion de Estructuras de datos
+                        ; *****************************************************************************
+                        
+                        
+                        ; Dirs of data to test
+1000                    BIN:            equ                        $1000
+                        
+1002                    BCD:            equ                        $1002
+                        
+                        ; Dirs of data to save
+1010                    NUM_BCD:        equ                        $1010
+                        
+1020                    NUM_BIN:        equ                        $1020
+                        
+                        
+                        ; Data to use
+1000                                            org                     $1000
+                                                
+                                                ; Valor de prueba #525 
+1000 00 7d                              dw                              #125
+                                                        
+1002                                            org                     $1002
+                        
+                                                ; Valor de prueba #1250 
+1002 12 50                              dw                              $1250
+                        
+                        ; Variables Temporales
+1100                                            org                     $1100
+1100                    TEMP:           ds                      2
+1102                    LOW:            ds                      1
+1103                    MID:            ds                      1
+                        
+                        ; *****************************************************************************
+                        ;                               Main Program
+                        ; *****************************************************************************
+                        
+2000                                            org         $2000
+2000 cd 00 00                                   Ldy                     #0
+2003 fc 10 00                                   Ldd                     BIN
+2006 06 20 0c                                   jmp                     BIN_BCD
+                        
+2009                    RETURN_BCD:
+                        ;                        Ldy                     #0
+                        ;                        ldx                     #0
+                        ;                        ldd                     BCD
+                        ;                        jmp                     BCD_BIN
+                        
+2009                    END:
+2009 06 20 09                                   jmp                     END
+                        
+                        
+                        
+                        ; *****************************************************************************
+                        ;                           Subrutine  BIN_BCD
+                        ; *****************************************************************************
+200c                    BIN_BCD:
+200c ce 00 0f                                   ldx                     #15
+                                        
+                                                ; NUM_BCD:NUM_BCD+1 = 0
+                        
+200f 79 10 10                                   clr                     NUM_BCD
+2012 79 10 11                                   clr                     NUM_BCD+1
+2015 79 10 12                                   clr                     NUM_BCD+2
+2018 fd 10 10                                   ldy                     NUM_BCD
+                        
+                                                ;asld
+                                                ;asld
+                                                ;asld
+                                                ;asld
+                                                ;std                     BIN
+                        
+201b                    LOOP_1:        
+201b 59                                         asld
+201c 75 10 12                                   rol                     NUM_BCD+2
+201f 75 10 11                                   rol                     NUM_BCD+1
+                                                ;rol                     NUM_BCD
+                        
+                        
+                        
+                                        ; Store A:B in TEMP
+2022 7c 11 00                                   std                     TEMP
+                        
+                                        ; Compare first 4 bytes
+2025 fc 10 11                                   ldd                     NUM_BCD+1
+2028 c4 0f                                      andb                    #$0F
+202a c1 05                                      cmpb                    #5
+202c 25 02                                      bcs                     NEXT_1
+202e cb 03                                      addb                    #3
+2030                    NEXT_1:
+                                        ; Store B
+2030 7b 11 02                                   stab                    LOW
+                        
+                                        ; Compare next 4 bytes
+2033 fc 10 11                                   ldd                     NUM_BCD+1
+2036 c4 f0                                      andb                    #$F0
+2038 c1 50                                      cmpb                    #$50
+203a 25 0a                                      bcs                     NEXT_2
+203c 18 0f                                      tba
+203e c7                                         clrb
+203f 8b 30                                      adda                    #$30
+2041 18 07                                      daa
+2043 18 0e                                      tab
+2045 87                                         clra
+                        
+2046                    NEXT_2:
+                        
+                                        ; Store in NUM_BCD+1
+2046 f3 11 02                                   addd                   LOW
+2049 18 07                                      daa
+                                        ; Store A in MID and in NUM_BIN+1
+204b 7c 10 11                                   std                    NUM_BCD+1
+                                                ;staa                   	MID
+                        
+                                        ; Compare last 4 bytes
+204e fc 10 10                                   ldd                     NUM_BCD
+2051 84 0f                                      anda                    #$0F
+2053 81 05                                      cmpa                    #$5
+2055 25 04                                      bcs                     NEXT_3
+2057 8b 03                                      adda                    #$03
+2059 18 07                                      daa
+                                                
+205b                    NEXT_3:
+                                        ; Add MID to D and store in NUM_BCD
+                        
+205b 7a 10 10           	                staa                   	NUM_BCD
+                                                
+                                        ; Load previous value in D
+205e fc 11 00                                   ldd                     TEMP
+2061 09                                         dex
+                        
+                                        ; Is x == 0
+2062 27 03                                      beq                     EXIT_L1
+2064 06 20 1b                                   jmp                     LOOP_1
+                        
+2067                    EXIT_L1:
+                                        ; Return to the main program
+2067 59                                         lsld
+2068 75 10 11                                   rol                     NUM_BCD+1
+                                                ;rol                     NUM_BCD
+206b 06 20 09                                   jmp                     RETURN_BCD
+                        
+                        
+                        ; *****************************************************************************
+                        ;                           Subrutine  BCD_BIN
+                        ; *****************************************************************************
+206e                    BCD_BIN:
+206e 7d 10 20                                   sty                     NUM_BIN
+2071 fd 10 20                                   Ldy                     NUM_BIN
+                        
+                                        ; First 4 bits
+2074 c4 0f                                      andb                    #$0F
+2076 19 ed                                      aby
+2078 7d 10 20                                   sty                     NUM_BIN
+                        
+                                        ; Second group of 4 bits
+207b fc 10 02                                   ldd                     BCD
+207e c4 f0                                      andb                    #$F0
+                                        ; Transform B = $x0 to B = $0x
+2080 54                                         lsrb
+2081 54                                         lsrb
+2082 54                                         lsrb
+2083 54                                         lsrb
+                                        ; D = B * 10
+2084 86 0a                                         ldaa                    #10
+2086 12                                         mul
+2087 f3 10 20                                   addd                    NUM_BIN
+208a 7c 10 20                                   std                     NUM_BIN
+                        
+                                        ; Third gorup of 4 bits                        
+208d fc 10 02                                   ldd                     BCD
+2090 84 0f                                      anda                    #$0F
+2092 c6 64                                      ldab                    #100
+2094 12                                         mul
+2095 f3 10 20                                   addd                    NUM_BIN
+2098 7c 10 20                                   std                     NUM_BIN
+                        
+                        
+                                        ; Final group of 4 bits                        
+209b fc 10 02                                   ldd                     BCD
+209e 84 f0                                      anda                    #$F0
+                                            ; Transform A = $X0 to A = $0X
+20a0 44                                         lsra
+20a1 44                                         lsra
+20a2 44                                         lsra
+20a3 44                                         lsra
+                                        ; D = A * B
+20a4 c6 64                                      ldab                    #100
+20a6 12                                         mul
+                                        ; D = D *10
+20a7 cd 00 0a                                   ldy                     #10
+20aa 13                                         emul
+20ab f3 10 20                                   addd                    NUM_BIN
+20ae 7c 10 20                                   std                     NUM_BIN
+                        
+                                        ; End of subroutine
+20b1 06 20 09                                   jmp                     END
+
+Executed: Tue May 26 04:57:39 2020
+Total cycles: 206, Total bytes: 184
+Total errors: 0, Total warnings: 0

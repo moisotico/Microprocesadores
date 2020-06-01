@@ -1,0 +1,127 @@
+
+as12, an absolute assembler for Motorola MCU's, version 1.2h
+
+                        ; Moises Campos
+                        ; 11-05-2020
+                        
+                        
+                        ; Posicion de inicio de los datos de origen.
+1000                    DATOS_NODOS:	equ             $1000
+                        
+                        ; Posicion de inicio de los datos de destino.
+1800                    ORDEN:		equ             $1800
+                        
+                        ; Cantidad de nodos. N<250.
+0010                    N:		equ             $10
+                        
+                        ; Cantidad de bits de offset para una direccion base de origen
+                        ; en los diferentes campos de cada nodo.
+                        
+                        ; Offset para numero de serie.
+1020                    OFFSET_SERIE:	equ             2*N+DATOS_NODOS
+                        
+                        ; Offset para baud rate.
+1040                    OFFSET_BR:	equ             4*N+DATOS_NODOS
+                        
+                        ; Offset para troughput.
+1060                    OFFSET_THP:     equ             6*N+DATOS_NODOS
+                        
+                        
+1000                                    org             $1000
+                                                        
+                                                        ; Se almacenan los valores de origen para los nodos.
+                                        ; nuemeros de modelos
+1000 00 00 11 15 22 20                  dw              $0000,$1115,$2220,$3335,$4440,$5555,$6660,$7775
+     33 35 44 40 55 55
+     66 60 77 75
+1010 88 80 99 95 aa a0                  dw              $8880,$9995,$aaa0,$bbb5,$ccc0,$ddd5,$eee0,$fff5
+     bb b5 cc c0 dd d5
+     ee e0 ff f5
+                                        ; numeros de serie
+1020 00 01 11 11 22 21                  dw              $0001,$1111,$2221,$3331,$4441,$5551,$6661,$7771
+     33 31 44 41 55 51
+     66 61 77 71
+1030 88 81 99 91 aa a1                  dw              $8881,$9991,$aaa1,$bbb1,$ccc1,$ddd1,$eee1,$fff1
+     bb b1 cc c1 dd d1
+     ee e1 ff f1
+                                        ; baud rate
+1040 00 02 11 12 22 22                  dw              $0002,$1112,$2222,$3332,$4442,$5552,$6662,$7772
+     33 32 44 42 55 52
+     66 62 77 72
+1050 88 82 99 92 aa a2                  dw              $8882,$9992,$aaa2,$bbb2,$ccc2,$ddd2,$eee2,$fff2
+     bb b2 cc c2 dd d2
+     ee e2 ff f2
+                                        ; troughput
+1060 00 04 11 14 22 24                  dw              $0004,$1114,$2224,$3334,$4444,$5554,$6664,$7774
+     33 34 44 44 55 54
+     66 64 77 74
+1070 88 84 99 94 aa a4                  dw              $8884,$9994,$aaa4,$bbb4,$ccc4,$ddd4,$eee4,$fff4
+     bb b4 cc c4 dd d4
+     ee e4 ff f4
+                                        ; exceso que no debe copiarse
+1080 ff ff ff ff ff ff                  dw              $ffff,$ffff,$ffff,$ffff,$ffff,$ffff,$ffff,$ffff
+     ff ff ff ff ff ff
+     ff ff ff ff
+1090 ff ff ff ff ff ff                  dw              $ffff,$ffff,$ffff,$ffff,$ffff,$ffff,$ffff,$ffff
+     ff ff ff ff ff ff
+     ff ff ff ff
+                        
+2000                                    org		$2000
+                        
+2000 cd 18 00                           ldy             #ORDEN
+2003 87                                 clra
+2004 c7                                 clrb
+2005                    INICIO:                
+2005 ce 10 01                           ldx      	#DATOS_NODOS+1
+2008 a6 e5                              ldaa            b,x
+200a 84 01                              anda            #$01
+                                                        
+                                        ; Verifica si el numero de serie es par, para diferenciar rutinas
+200c 27 03                              beq             PAR
+200e 06 20 30           		jmp             IMPAR
+2011                    PAR:
+                                        ; Se mueve el numero de modelo del elemento en B a ORDEN
+2011 ce 10 00                           ldx             #DATOS_NODOS
+2014 18 02 e5 71                        movw		b,x,2,y+
+                                        ; Se mueve el numero de serie del elemento en B a ORDEN        
+2018 ce 10 20                           ldx		#OFFSET_SERIE
+201b 18 02 e5 71                        movw		b,x,2,y+
+                                        ; Se mueve el baudrate del elemento en B a ORDEN        
+201f ce 10 40                           ldx             #OFFSET_BR
+2022 18 02 e5 71                        movw            b,x,2,y+
+                                        ; Se mueve el Throughput del elemento en B a ORDEN        
+2026 ce 10 60                           ldx             #OFFSET_THP
+2029 18 02 e5 71                        movw            b,x,2,y+
+                                        ; Se avanza al siguiente elemento
+202d 06 20 4c                           jmp             AVANZA
+                                                        
+2030                    IMPAR:
+                                        ; Se mueve el numero de serie del elemento en B a ORDEN        
+2030 ce 10 20                           ldx             #OFFSET_SERIE
+2033 18 02 e5 71                        movw            b,x,2,y+
+                                        ; Se mueve el baudrate del elemento en B a ORDEN        
+2037 ce 10 40                           ldx             #OFFSET_BR
+203a 18 02 e5 71                        movw            b,x,2,y+
+                                        ; Se mueve el Throughput del elemento en B a ORDEN        
+203e ce 10 60                           ldx             #OFFSET_THP
+2041 18 02 e5 71                        movw            b,x,2,y+
+                                        ; Se mueve el numero de modelo del elemento en B a ORDEN
+2045 ce 10 00                           ldx             #DATOS_NODOS
+2048 18 02 e5 71                        movw            b,x,2,y+
+                        
+204c                    AVANZA:                
+                                        ; Se verifica si b < N
+204c cb 02                              addb		#2
+204e c1 10                              cmpb            #N
+2050 25 b3                              bcs             INICIO
+2052                    FIN:                
+                                        ; Fin del programa
+2052 06 20 52                           jmp             FIN
+                                        end
+                                                        
+                                                        
+                                                        
+
+Executed: Tue May 12 00:28:12 2020
+Total cycles: 76, Total bytes: 245
+Total errors: 0, Total warnings: 0

@@ -1,0 +1,16 @@
+bcd        1002
+bcd_bin    206e
+bin        1000
+bin_bcd    200c
+end        2009
+exit_l1    2067
+loop_1     201b
+low        1102
+mid        1103
+next_1     2030
+next_2     2046
+next_3     205b
+num_bcd    1010
+num_bin    1020
+return_bcd 2009
+temp       1100

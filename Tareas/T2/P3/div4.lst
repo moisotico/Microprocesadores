@@ -1,0 +1,66 @@
+
+as12, an absolute assembler for Motorola MCU's, version 1.2h
+
+                        ; Moises Campos Zepeda
+                        ; 25-05-2020
+                        ; IE0623: Microprocesadores
+                        ; Tarea #2
+                        ; Problema # 3
+                        ; Nota: el codigo se comento en ingles
+                        ; *****************************************************************************
+                        ;                           Declaracion de Estructuras de datos
+                        ; *****************************************************************************
+1000                                    org     $1000
+1000                    L:              ds      $1
+1001                    COUNT4          ds      $1
+                        
+1100                                    org     $1100
+1100                    DATOS:          ds      255
+                        
+1200                                    org     $1200
+1200                    DIV4:           ds      255
+                        
+                        
+                        ; *****************************************************************************
+                        ;                               Main Program
+                        ; *****************************************************************************
+                        
+                        
+                        
+                        
+2000                                        org $2000
+2000                    div4Prog:       
+                                        ;
+2000 18 0b 00 10 01                     movb    #0,COUNT4   
+2005 ce 11 00           		        ldx     #DATOS
+2008 09                                 dex
+2009 cd 12 00                           ldy     #Div4
+200c b6 10 00                           ldaa    L
+200f c6 00                              ldab    #0
+2011                    LOOP:           
+2011 66 e4                              ror     A,X
+                                        ; Check % 2
+2013 25 06                              blo     NOTMOD2
+2015 66 e4                              ror     A,X
+2017 24 09                              bhs     MOD4
+2019                    NOTMOD4:
+2019 65 e4                              rol     A,X
+201b                    NOTMOD2:        
+                                        ; Decrement counter   
+201b 65 e4                              rol     A,X              
+201d 04 30 f1                           dbne    A, LOOP
+2020 20 0f                              bra     Fin
+2022                    MOD4:           
+                                        ; if %4=0 return to original, use C for branch 
+2022 65 e4                              rol     A,X            
+2024 65 e4                              rol     A,X                 
+2026 18 0a e4 ed                        movb    A,X,B,Y
+202a 52                                 incb
+202b 72 10 01                           inc     COUNT4
+202e 04 30 e0                           dbne    A,LOOP
+2031                    FIN:            
+2031 20 fe                              bra     FIN
+
+Executed: Tue May 26 07:53:37 2020
+Total cycles: 59, Total bytes: 51
+Total errors: 0, Total warnings: 0
