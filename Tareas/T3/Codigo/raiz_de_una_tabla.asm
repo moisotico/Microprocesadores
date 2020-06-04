@@ -24,7 +24,7 @@ CANT:       ds      1
 CONT:       ds      1
 
             org         $1010
-ENTEROS:    ds      100
+ENTERO:    ds       100
 
             org         $1020
 DATOS:      db      4,9,18,4,27,63,12,32,36,15
@@ -46,11 +46,27 @@ MSG0:       fcc "IE0623: Microprocesadores. Tarea #3. Elaborada por Moises Campo
 MSG1:       fcc "Ingrese el valor de cant Entre 1 y 99"
             fcb CR,CR,LF,FIN
 
-MSG2:       fcc "Cantidad de valores encontrados %i"
+MSG2:       fcc "Valor ingresado %i"
             fcb CR,CR,LF,FIN
 
-MSG3:       fcc "Valores en Entero: +"
+MSG3:       fcc "Cantidad de valores encontrados %i"
+            fcb CR,CR,LF,FIN
+
+MSG4:       fcc "Valores en ENTERO: "
             fcb FIN
+
+MSG5:       fcc "%i, "
+            fcb FIN
+
+MSG5:       fcc "%i"
+            fcb FIN
+
+ERR1:       fcc "ERROR: La tecla ingresada no es valida!"
+            fcb CR,CR,LF,FIN
+
+ERR2:       fcc "ERROR: El valor $00 no es valido!"
+            fcb CR,CR,LF,FIN
+
 
 ; *****************************************************************************
 ;                               Main Program
@@ -67,8 +83,8 @@ MSG3:       fcc "Valores en Entero: +"
             clrb
             jsr     LEER_CANT
 
-            jsr     BUSCAR
-        ;   jsr     Print_RESULT
+        ;    jsr     BUSCAR
+        ;    jsr     Print_RESULT
         ; End of Program
             bra     *
 
@@ -78,23 +94,68 @@ MSG3:       fcc "Valores en Entero: +"
 ;                           Subroutine  LEER_CANT
 ; *****************************************************************************
 LEER_CANT:
-        ;CANT = $2 meanwhile
-        ldaa    #$FF
-        staa    CANT
-        ldx     #0
+            ldaa    #$FF
+            staa    CANT
+            ldx     #0
+            ldd     #MSG1
 
-;            lds     #$3BFF
-;            ldd     #MSG1
-LOOP_CANT1:
-;            jsr     [PrintF,X]
-;            ldx     #0
-LOOP_CANT2:
-    ; TODO: Subroutine GETCHAR
-    
+LOOP_CANT_A:
+            jsr     [PrintF,X]
 
-        ;TODO: Routine
-        ; SP stack push
-        rts 
+LOOP_CANT_B:
+            ldx     #0
+            jsr     [GETCHAR,X]
+        ;check valid char
+            cpd     $30
+            blo     CATCH_1
+            cpd     $39
+            bhi     CATCH_1`
+        ;CANT = $FF ?
+            ldaa    #$FF
+            cmpa    CANT
+            bne     CHECK_VALUE
+        ;first digit of two
+            subb    #$30
+            orab    #$F0
+            stab    CANT
+            jmp     LOOP_CANT_B
+
+CHECK_VALUE:
+            subb    #$30
+            ldaa    #$0A
+            mul
+            addd    #CANT
+            cpd     #0
+            beq     CATCH_2
+        ; Store CANT
+            clra
+            stab    CANT
+            ldx     #0
+        ; Show CANT
+            clra    
+            ldab    #CANT
+            pshd
+            ldd     #MSG2
+            jsr     [PrintF,X]
+            leas    2,SP
+            rts
+
+CATCH_1:
+        ; catch invalid char
+            ldx     #0
+            ldd     #ERR1
+            jsr     [PrintF,X]
+            jmp     LOOP_CANT_A
+
+CATCH_2:
+        ; Reset CANT
+            ldaa    #$FF
+            staa    CANT
+        ; catch invalid char
+            ldx     #0
+            ldd     #ERR2
+            jsr     [PrintF,X]
+            jmp     LOOP_CANT_A
 
 
 ; *****************************************************************************
@@ -132,7 +193,7 @@ MATCH:
             pula
             pulx
             sty         TEMP
-            ldy         #ENTEROS
+            ldy         #ENTERO
             ldab        CONT
             staa        B,Y        
             inc         CONT
@@ -145,9 +206,9 @@ INCREASE:
             inca
             jmp         LOOP_BUSCAR
 
-
 RETURN_BUSCAR:
             rts 
+
 
 ; *****************************************************************************
 ;                           Subroutine  RAIZ
@@ -188,3 +249,33 @@ RETURN_RAIZ:
 ;                           Subroutine  Print_RESULT
 ; *****************************************************************************
         ;TODO: Routine
+Print_RESULT:
+            clra
+            ldab        #CONT
+            pshd
+            ldx         #0
+            ldd         #MSG3
+            jsr         [PrintF,X]
+            leas        2,SP
+            ldy         #ENTERO
+            ldx         #0
+            ldd         #MSG4
+
+LOOP_PRINT:
+            jsr         [PrintF,X]
+            leas        2,SP
+            clra
+            ldab        0,Y
+            pshd
+            ldx         #0
+            cpx         #CONT
+            beq         RETURN_PRINT
+            ldd         #MSG5
+            dec         CONT
+            iny
+            jmp         LOOP_PRINT
+            
+RETURN_PRINT:
+            ldd         #MSG6
+            jsr         [PrintF,X]
+            rts        
