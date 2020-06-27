@@ -15,7 +15,7 @@ FIN:            equ         $0
 
             org         $1000
 ; Size of Num_Array        
-MAX_TCL:        db  #2
+MAX_TCL:        db  5
 Tecla:          ds  1
 Tecla_IN:       ds  1
 Cont_Reb:       ds  1
@@ -35,14 +35,14 @@ Teclas:         db  $01,$02,$03,$04,$05,$06,$07,$08,$09,$0B,$00,$0E
 MSG:           fcc "Numero: %X"
                fcb CR,LF,CR,LF,FIN
 
-MSG2:       fcc "Cantidad de valores ingresados %i"
+MSG2:       fcc "Contador de rebotes: %i"
             fcb CR,CR,LF,FIN
 
-MSG3:       fcc "%i, "
-            fcb LF, FIN
+;MSG3:       fcc "%i, "
+;            fcb LF, FIN
 
-MSG4:       fcc "%i"
-            fcb CR,CR,LF,FIN
+;MSG4:       fcc "%i"
+;            fcb CR,CR,LF,FIN
 
 
 
@@ -50,21 +50,21 @@ MSG4:       fcc "%i"
 ;                       Interruption Vector Relocation
 ; *****************************************************************************
 
-            org        $3E70
+            org         $3E70
             ;org        $FFF0
-            dw      RTI_ISR
+            dw          RTI_ISR
 
-            org        $3E4C
+            org         $3E4C
             ;org        $FFCC
-            dw      PHO_ISR
+            dw          PHO_ISR
 
 
 
 ; *****************************************************************************
 ;                               HW Config
 ; *****************************************************************************
-            org         $2000
-        ; PHO
+            org             $2000
+        ; Key wakeup PHO
             bset        PIEH,$01
             bset        PIFH,$01
         ; Enable pullup resistors on Port A
@@ -75,6 +75,7 @@ MSG4:       fcc "%i"
             movb        #$F0, DDRA
         ; T = 11 ms 
             movb        $4A,RTICTL
+            cli
 
 
 ; *****************************************************************************
@@ -84,9 +85,9 @@ MSG4:       fcc "%i"
 
             movb        #$FF, TECLA
             movb        #$FF, TECLA_IN
-ARRAY_RST:
             ldaa        MAX_TCL
             ldx         #Num_Array-1
+ARRAY_RST:
             movb        #$FF,A,X
             dbne        A,ARRAY_RST
             
@@ -106,25 +107,30 @@ MAIN_LOOP:
 TAREA_TECLADO:
             tst         Cont_Reb
             bne         RETURN_TT
+            ; Print Tecla value
+            ldab        Cont_Reb
+            clra
+            pshd
+            ldx         #0
+            ldd         #MSG2
+            jsr         [PrintF,X]
+            leas        2,SP
+        ;Go to MUX_TECLADO    
             jsr         MUX_TECLADO
-
             ldaa        TECLA
             cmpa        #$FF
             beq         CHECK_ARRAY
-
             brclr       Banderas,$02,REBOTES
-            ldaa        TECLA
-            ldab        TECLA_IN
-            cba
-            beq         TCL_LISTA
+            cmpa        TECLA_IN
+            bne         TCL_NOT_READY
+        ; TCL_LISTA = 1
+            bset        Banderas,$01
+            jmp         RETURN_TT
+
+TCL_NOT_READY:
             movb        #$FF, TECLA
             movb        #$FF, TECLA_IN
             bclr        Banderas, $03
-            jmp         RETURN_TT
-
-TCL_LISTA:
-        ; TCL_LISTA = 1
-            bset        Banderas,$01
             jmp         RETURN_TT
 
 REBOTES:
@@ -152,6 +158,12 @@ MUX_TECLADO:
 
 READ_LOOP:
             movb        Patron, PORTA
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
         ; check col 0 of port A
             brclr       PORTA,$01,WR_TECLA
             incb
@@ -175,13 +187,12 @@ WR_TECLA:
         ; Print Tecla value
             ldab        Tecla
             clra
-            ldx         #0
             pshd
+            ldx         #0
             ldd         #MSG
             jsr         [PrintF,X]
+            leas        2,SP
             rts
-
-
 
 
 ; *****************************************************************************
@@ -218,7 +229,6 @@ CHECK_E:
 COMPARE_E:
         ; ARRAY_OK = 1
             bset        Banderas,$04
-           ; jsr         Print_Result
             jmp         RETURN_FA
 
 CATCH_EORB:
@@ -240,12 +250,11 @@ RETURN_FA
 ; *****************************************************************************
 ;                           RTI_ISR Subroutine
 ; *****************************************************************************
-RTI_ISR:    
+RTI_ISR:
             bset        CRGFLG, $80
             tst         Cont_Reb
             beq         RETURN_RTI
             dec         Cont_Reb
-
 RETURN_RTI:
             rti
 
@@ -253,16 +262,17 @@ RETURN_RTI:
 ; *****************************************************************************
 ;                           PHO_ISR Subroutine
 ; *****************************************************************************
-PHO_ISR:
+PHO_ISR:    
+            bset        PIFH,$01
             ldx         #Num_Array
-            bclr        Banderas, $04
+            brclr       Banderas,$04,RETURN_PHO
+            bclr        Banderas,$04
             ldaa        MAX_TCL 
-LOOP_P:       
-            tsta
+LOOP_P:
+            ldab        1,X+
+            cmpb        #$FF
             beq         RETURN_PHO
-            deca
-            movb        #$FF,A,X
-            jmp         LOOP_P
-
+            movb        #$FF,-1,X
+            dbne        A,LOOP_P
 RETURN_PHO:
             rti
