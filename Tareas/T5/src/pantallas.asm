@@ -1,63 +1,101 @@
-
 ; Moises Campos Zepeda
 ; 15-06-2020
 ; IE0623: Microprocesadores
-; Tarea 4: teclado matricial
-
+; Tarea 5: Pantallas
 
 #include registers.inc
 
 ; *****************************************************************************
 ;                           Data Structures
 ; *****************************************************************************
-CR:             equ         $0D
-LF:             equ         $0A
-FIN:            equ         $0
+CR:             equ $0D
+LF:             equ $0A
+FIN:            equ $0
 
             org         $1000
 ; Size of Num_Array        
-MAX_TCL:        db  5
+Banderas:       ds  1
+MAX_TCL:        db  2
 Tecla:          ds  1
 Tecla_IN:       ds  1
 Cont_Reb:       ds  1
 Cont_TCL:       ds  1
 Patron:         ds  1
-Banderas:       ds  1
 
 ; Array of pressed buttons, by default $FF
-Num_Array:      ds  6
+Num_Array:      ds  2
+
+CUENTA:         ds  1
+AcmPQ:          ds  1
+CantPQ:         ds  1
+TIMER_CUENTA:   ds  1
+LEDS:           ds  1
+BRILLO:         ds  1
+CONT_DIG:       ds  1
+CONT_TICKS:     ds  1
+DT:             ds  1
+BIN1:           ds  1
+BIN2:           ds  1
+BCD_L:          ds  1
+LOW:            ds  1
+TEMP:           ds  1
+BCD1            ds  1
+BCD2            ds  1
+DISP1           ds  1
+DISP2           ds  1
+DISP3           ds  1
+DISP4           ds  1
+CONT_7SEG       ds  1
+Cont_Delay      ds  1
+; TODO
+;D2mS            db  1
+;D260uS          db  1
+;D40uS           db  1
+;Clear_LCD       db  1
+;ADD_L1          db  1
+;ADD_L2          db  1
+
 
 ; Key values  
+            org     $1030
 Teclas:         db  $01,$02,$03,$04,$05,$06,$07,$08,$09,$0B,$00,$0E
 
-            org         $1200
+            org     $1040
+        ; 0, 1, ..., 9     
+ SEGMENT:       db  $3F,$06,$5B,$4F,$66,$6D,$7D,$07,$7F,$6F
+
+; TODO: org     $1050
+; iniDisp Array
+
+
+            org         $1060
 
             ; DELETE OR COMMENT
-MSG:           fcc "Numero: %X"
+
+MSG0:          fcc "Numero a en array: %X"
                fcb CR,LF,CR,LF,FIN
 
-MSG2:       fcc "Contador de rebotes: %i"
-            fcb CR,CR,LF,FIN
+MSG1:          fcc "MODO CONFIG"
+               fcb CR,LF,CR,LF,FIN 
 
-;MSG3:       fcc "%i, "
-;            fcb LF, FIN
+MSG2:          fcc "INGRSE CantPQ"
+                db CR,LF,CR,LF,FIN
+ 
+MSG3:          fcc "MODO RUN"
+                db CR,LF,CR,LF,FIN               
 
-;MSG4:       fcc "%i"
-;            fcb CR,CR,LF,FIN
-
+MSG4:          fcc "AcmPQ CUENTA"
+                db CR,LF,CR,LF,FIN               
 
 
 ; *****************************************************************************
 ;                       Interruption Vector Relocation
 ; *****************************************************************************
 
-            org         $3E70
-            ;org        $FFF0
-            dw          RTI_ISR
-
-            org         $3E4C
-            ;org        $FFCC
-            dw          PHO_ISR
+            org             $3E70
+            dw      RTI_ISR
+            org             $3E4C
+            dw      PTH_ISR
 
 
 
@@ -65,27 +103,40 @@ MSG2:       fcc "Contador de rebotes: %i"
 ;                               HW Config
 ; *****************************************************************************
             org             $2000
-        ; Key wakeup PHO
-            bset        PIEH,$01
-            bset        PIFH,$01
-        ; Enable pullup resistors on Port A
-            bset        PUCR,$01    
-        ; RTI
-            bset        CRGINT,$80
-        ; Set imputs and outputs
-            movb        #$F0, DDRA
-        ; T = 11 ms 
-            movb        $4A,RTICTL
-            cli
 
+        ; LEDS
+            bset        PTJ,$02
+            movb        #$0F,DDRP
+            bset        PTP,$0F
+            movb        #$FF,DDRB
+
+        ; Ctrl registers and timer enable
+            bset        TSCR1,$90 
+            bset        TSCR2,$04
+            bset        TIOS,$20
+            bset        TIE,$20
+            bset        TCTL1,$0
+
+        ; Key wakeup PTH
+            bset        PIEH,$01          
+            bset        PIFH,$0F
+        ; RTI @ 1,027 ms
+            movb        #$17, RTICTL       
+            bset        CRGINT,$80
+        ; PORTA + Pullup resistors     
+            movb        #$F0,DDRA
+            bset        PUCR,$01
+        ;Port E relay
+            bset        DDRE,$04
+        ; Enable masked interruptions
+            cli
 
 ; *****************************************************************************
 ;                               Main Program
 ; *****************************************************************************
             lds         #$3BFF
-
-            movb        #$FF, TECLA
-            movb        #$FF, TECLA_IN
+            movb        #$FF, Tecla
+            movb        #$FF, Tecla_IN
             ldaa        MAX_TCL
             ldx         #Num_Array-1
 ARRAY_RST:
@@ -99,6 +150,16 @@ ARRAY_RST:
 
 MAIN_LOOP:
             brset       Banderas,$04,MAIN_LOOP
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
             jsr         TAREA_TECLADO
             bra         MAIN_LOOP
     
@@ -108,42 +169,42 @@ MAIN_LOOP:
 TAREA_TECLADO:
             tst         Cont_Reb
             bne         RETURN_TT
-            ; Print Tecla value
-            ldab        Cont_Reb
-            clra
-            pshd
-            ldx         #0
-            ldd         #MSG2
-            jsr         [PrintF,X]
-            leas        2,SP
         ;Go to MUX_TECLADO    
             jsr         MUX_TECLADO
-            ldaa        TECLA
+            ldaa        Tecla
             cmpa        #$FF
             beq         CHECK_ARRAY
             brclr       Banderas,$02,REBOTES
-            cmpa        TECLA_IN
+            cmpa        Tecla_IN
             bne         TCL_NOT_READY
         ; TCL_LISTA = 1
             bset        Banderas,$01
-            jmp         RETURN_TT
+            bra         RETURN_TT
 
 TCL_NOT_READY:
-            movb        #$FF, TECLA
-            movb        #$FF, TECLA_IN
-            bclr        Banderas, $03
-            jmp         RETURN_TT
+            movb        #$FF,Tecla
+            movb        #$FF,Tecla_IN
+            bclr        Banderas,$03
+            bra         RETURN_TT
 
 REBOTES:
-            movb        TECLA, TECLA_IN
+            movb        Tecla,Tecla_IN
         ; TCL_LEIDA = 1
             bset        Banderas,$02
-            movb        #$0A, Cont_Reb
-            jmp         RETURN_TT
+            movb        #10,Cont_Reb
+            bra         RETURN_TT
 
 CHECK_ARRAY:
             brclr       Banderas,$01,RETURN_TT
-            bclr        Banderas, $03
+            bclr        Banderas,$03
+            ; Print Tecla value
+            ldab        Tecla_IN
+            clra
+            pshd
+            ldx         #0
+            ldd         #MSG1
+            jsr         [PrintF,X]
+            leas        2,SP
             jsr         FORMAR_ARRAY
 
 RETURN_TT:      
@@ -159,12 +220,6 @@ MUX_TECLADO:
 
 READ_LOOP:
             movb        Patron, PORTA
-            nop
-            nop
-            nop
-            nop
-            nop
-            nop
         ; check col 0 of port A
             brclr       PORTA,$01,WR_TECLA
             incb
@@ -175,24 +230,17 @@ READ_LOOP:
             brclr       PORTA,$04,WR_TECLA
             incb
             lsl         Patron
-            ldaa        #$F0
-            cmpa        Patron
+            ldaa        Patron
+            cmpa        #$F0
             bne         READ_LOOP
         ; If no key was pressed
-            movb        #$FF,Tecla
-            rts
+            movb        #$FF,TECLA
+            bra         RETURN_MUX
 
         ; If a key was pressed
 WR_TECLA:
             movb        B,X,Tecla
-        ; Print Tecla value
-            ldab        Tecla
-            clra
-            pshd
-            ldx         #0
-            ldd         #MSG
-            jsr         [PrintF,X]
-            leas        2,SP
+RETURN_MUX:
             rts
 
 
@@ -248,32 +296,75 @@ RETURN_FA
             movb        #$FF,TECLA_IN
             rts
 
-; *****************************************************************************
-;                           RTI_ISR Subroutine
-; *****************************************************************************
-RTI_ISR:
-            bset        CRGFLG, $80
-            tst         Cont_Reb
-            beq         RETURN_RTI
-            dec         Cont_Reb
-RETURN_RTI:
-            rti
 
+; *****************************************************************************
+;                           Subrutine  BCD_BIN
+; *****************************************************************************
+BCD_BIN:
+    ; Decimal 4 bits
+            ldab        Num_Array
+            ldaa        #10
+            mul
+            addd        Num_Array+1
+            std         CantPQ
+    ; End of subroutine
+            rts
+
+
+; ************************************ISR*************************************
 
 ; *****************************************************************************
 ;                           PHO_ISR Subroutine
 ; *****************************************************************************
-PHO_ISR:    
+PTH_ISR:
+            brset       PIFH,$01,PH0
+            brset       PIFH,$02,PH1
+            brset       PIFH,$04,PH2
+            brset       PIFH,$08,PH3
+            bra         RETURN_PTH
+PH0:
             bset        PIFH,$01
-            ldx         #Num_Array
-            brclr       Banderas,$04,RETURN_PHO
-            bclr        Banderas,$04
-            ldaa        MAX_TCL 
-LOOP_P:
-            ldab        1,X+
-            cmpb        #$FF
-            beq         RETURN_PHO
-            movb        #$FF,-1,X
-            dbne        A,LOOP_P
-RETURN_PHO:
+            brclr       Cont_Reb,$FF,RETURN_PTH
+            clr         CUENTA
+            movb        #25,Cont_Reb
+            ;stop relay
+            bclr        PORTE,$04
+            bra         RETURN_PTH
+PH1:
+            bset        PIFH,$02
+            brclr       Cont_Reb,$FF,RETURN_PTH
+            clr         AcmPQ
+            movb        #25,Cont_Reb
+            ;stop relay
+            bclr        PORTE,$04
+            bra         RETURN_PTH
+PH2:
+            bset        PIFH,$04
+            ldaa        BRILLO
+            bls         RETURN_PTH
+            suba        #5
+            staa        BRILLO
+            bra         RETURN_PTH
+PH3:
+            bset        PIFH,$08
+            ldaa        BRILLO
+            cmpa        #100
+            bhs         RETURN_PTH
+            adda        #5
+            staa        BRILLO
+            bra         RETURN_PTH
+RETURN_PTH:
+            rti
+
+
+; *****************************************************************************
+;                           RTI_ISR Subroutine
+; *****************************************************************************
+RTI_ISR:
+            loc
+            bset        CRGFLG,$80
+            tst         Cont_Reb
+            beq         RETURN`
+            dec         Cont_Reb
+RETURN`:
             rti

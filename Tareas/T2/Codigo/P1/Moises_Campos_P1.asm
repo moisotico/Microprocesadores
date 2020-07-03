@@ -11,12 +11,10 @@
 
 ; Dirs of data to test
 BIN:            equ                        $1000
-
 BCD:            equ                        $1002
 
 ; Dirs of data to save
 NUM_BCD:        equ                        $1010
-
 NUM_BIN:        equ                        $1020
 
 
@@ -169,7 +167,7 @@ BCD_BIN:
                         lsrb
                         lsrb
                 ; D = B * 10
-                           ldaa                    #10
+                        ldaa                    #10
                         mul
                         addd                    NUM_BIN
                         std                     NUM_BIN
@@ -186,7 +184,7 @@ BCD_BIN:
                 ; Final group of 4 bits                        
                         ldd                     BCD
                         anda                    #$F0
-                    ; Transform A = $X0 to A = $0X
+                ; Transform A = $X0 to A = $0X
                         lsra
                         lsra
                         lsra

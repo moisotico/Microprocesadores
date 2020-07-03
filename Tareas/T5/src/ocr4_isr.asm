@@ -1,26 +1,30 @@
-
-; Moises Campos Zepeda
-; 06-06-2020
+i; Moises Campos Zepeda
+; 15-06-2020
 ; IE0623: Microprocesadores
-; Ejercicio 6: Desplazamiento de LEDS con timer de comparacion
+; Tarea 5: Pantallas
 
-; Include File
 #include registers.inc
-
 
 ; *****************************************************************************
 ;                           Data Structures
-; ****************************************************************************
-            org             $1000
-LEDS:       ds              1
-CONT_OC:    ds              1
+; *****************************************************************************
+CR:             equ $0D
+LF:             equ $0A
+FIN:            equ $0
+
+            org         $1000
+; Size of Num_Array        
+
 
 ; *****************************************************************************
 ;                       Interruption Vector Relocation
 ; *****************************************************************************
-            org             $3E64
-            dw          OC5_ISR
 
+            org             $3E70
+            dw      RTI_ISR
+            org             $3E4C
+            dw      PH0_ISR
+            
 ; *****************************************************************************
 ;                               HW Config
 ; *****************************************************************************            
@@ -74,4 +78,5 @@ RETURN_ISR:
 
 LSL_LEDS:
             lsl         LEDS
-            bra         RETURN_ISR
+            bra         RETURN_IS
+
