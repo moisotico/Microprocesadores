@@ -33,17 +33,11 @@ Teclas:         db  $01,$02,$03,$04,$05,$06,$07,$08,$09,$0B,$00,$0E
             org         $1200
 
             ; DELETE OR COMMENT
-MSG:           fcc "Numero: %X"
+MSG0:           fcc "Tecla: %X"
                fcb CR,LF,CR,LF,FIN
 
-MSG2:       fcc "Contador de rebotes: %i"
+MSG1:       fcc "Array Ok"
             fcb CR,CR,LF,FIN
-
-;MSG3:       fcc "%i, "
-;            fcb LF, FIN
-
-;MSG4:       fcc "%i"
-;            fcb CR,CR,LF,FIN
 
 
 
@@ -75,7 +69,7 @@ MSG2:       fcc "Contador de rebotes: %i"
         ; Set imputs and outputs
             movb        #$F0, DDRA
         ; T = 11 ms 
-            movb        $4A,RTICTL
+            movb        $17,RTICTL
             cli
 
 
@@ -108,14 +102,6 @@ MAIN_LOOP:
 TAREA_TECLADO:
             tst         Cont_Reb
             bne         RETURN_TT
-            ; Print Tecla value
-            ldab        Cont_Reb
-            clra
-            pshd
-            ldx         #0
-            ldd         #MSG2
-            jsr         [PrintF,X]
-            leas        2,SP
         ;Go to MUX_TECLADO    
             jsr         MUX_TECLADO
             ldaa        TECLA
@@ -143,6 +129,14 @@ REBOTES:
 
 CHECK_ARRAY:
             brclr       Banderas,$01,RETURN_TT
+            ; Print Tecla value
+            ldab        Tecla_IN
+            clra
+            pshd
+            ldx         #0
+            ldd         #MSG0
+            jsr         [PrintF,X]
+            leas        2,SP
             bclr        Banderas, $03
             jsr         FORMAR_ARRAY
 
@@ -159,6 +153,13 @@ MUX_TECLADO:
 
 READ_LOOP:
             movb        Patron, PORTA
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
             nop
             nop
             nop
@@ -185,14 +186,6 @@ READ_LOOP:
         ; If a key was pressed
 WR_TECLA:
             movb        B,X,Tecla
-        ; Print Tecla value
-            ldab        Tecla
-            clra
-            pshd
-            ldx         #0
-            ldd         #MSG
-            jsr         [PrintF,X]
-            leas        2,SP
             rts
 
 
@@ -220,7 +213,9 @@ CHECK_B:
             bne         CHECK_E
 
 COMPARE_B:
-            dec         Cont_TCL
+            decb
+            stab        Cont_TCL
+            movb        #$FF,B,X
             jmp         RETURN_FA
 
 CHECK_E:
@@ -230,6 +225,11 @@ CHECK_E:
 COMPARE_E:
         ; ARRAY_OK = 1
             bset        Banderas,$04
+        ; Print Array ok
+            ldx         #0
+            ldd         #MSG1
+            jsr         [PrintF,X]
+            clr         Cont_TCL
             jmp         RETURN_FA
 
 CATCH_EORB:
@@ -245,7 +245,6 @@ ADD_ARRAY:
             inc         Cont_TCL
 
 RETURN_FA
-            movb        #$FF,TECLA_IN
             rts
 
 ; *****************************************************************************
