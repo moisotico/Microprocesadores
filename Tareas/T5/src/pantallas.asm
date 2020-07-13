@@ -10,6 +10,7 @@
 CR:             equ $0D
 LF:             equ $0A
 FIN:            equ $0
+VMAX:           equ $FA ;#250 for 3HZ
 
             org         $1000
 ; Size of Num_Array        
@@ -38,21 +39,22 @@ BIN2:           ds  1
 BCD_L:          ds  1
 LOW:            ds  1
 TEMP:           ds  1
-BCD1            ds  1
-BCD2            ds  1
-DISP1           ds  1
-DISP2           ds  1
-DISP3           ds  1
-DISP4           ds  1
-CONT_7SEG       ds  2
-Cont_Delay      ds  1
-D2mS            db  100
-D240uS          db  12
-D60uS           db  3
-Clear_LCD       db  $01
-ADD_L1          db  $80
-ADD_L2          db  $C0
+BCD1:            ds  1
+BCD2:            ds  1
+DISP1:           ds  1
+DISP2:           ds  1
+DISP3:           ds  1
+DISP4:           ds  1
+CONT_7SEG:       ds  2
+Cont_Delay:      ds  1
+D2mS:            db  100
+D240uS:          db  12
+D60uS:           db  3
+Clear_LCD:       db  $01
+ADD_L1:          db  $80
+ADD_L2:          db  $C0
 SendData:       ds  1
+BIN_NUM:        ds  1
 
 
 ; Key values  
@@ -143,140 +145,66 @@ MSG4:          fcc "AcmPQ CUENTA"
 ; *****************************************************************************
 ;                               Main Program
 ; *****************************************************************************
-            lds         #$3BFF
-            clr         BCD1
-            clr         BCD2
-            clr         BIN1
-            clr         BIN2
-            clr         LEDS
-            clr         DISP1
-            clr         DISP2
-            clr         DISP3
-            clr         DISP4
-            bset        PTIH,$80
-            clr         CONT_TICKS
-            clr         CONT_DIG
-            movb        #50,BRILLO
-            movb        #$FF,Tecla
-            movb        #$FF,Tecla_IN
-            clr         Cont_Reb
-            clr         Cont_TCL
-            clr         Patron
-            clr         BANDERAS
-            bset        BANDERAS,$10
-            ldaa        MAX_TCL
-            ldx         #Num_Array-1
-ARRAY_RST:
-            movb        #$FF,A,X
-            dbne        A,ARRAY_RST   
-MAIN_LOOP:
+mainL:
+            loc
             tst         CantPQ
-            beq         SET_MOD
+            beq         chknodoM1
             ldaa        PTIH
             anda        #$80
-            lsra
-            lsra
-            lsra
-            lsra
             ldab        BANDERAS
             andb        #$08
+            lslb 
+            lslb 
+            lslb 
+            lslb 
             cba
-            beq         CHK_MODSEL
+            beq         nochange`
             bset        BANDERAS,$10
-            tstb
-            bne         SET_FLG3
-            bclr        BANDERAS,$08
-            bra         CHK_MODSEL
-SET_FLG3:   
-            bset        BANDERAS,$08
-CHK_MODSEL:
-            ldaa        PTIH
             cmpa        #$80
-            beq         CHK_CAMBMOD
-        ; check CambMod flag             
-            ldab        BANDERAS
-            cmpb        #$10
-            bne         GO2RUN
-            bclr        BANDERAS,$10
-            bset        PIEH,$03
-            ldx         MSG3
-            ldy         MSG4
-            movb        #1,LEDS
-            jsr         CARGAR_LCD
-GO2RUN:
-            jsr         MODO_RUN
-            bra         MAIN_LOOP              
-            
-SET_MOD:
+            beq         ph1`
+            bclr        BANDERAS,$08
+            bra         nochange`
+ph1`        
             bset        BANDERAS,$08
-CHK_CAMBMOD:
-            ldab        BANDERAS
-            cmpb        #$10
-            bne         GO2CONFIG
-            bclr        BANDERAS,$10
-            clr         CUENTA
-            clr         AcmPQ
-            bclr        PIEH,$03
-            ldx         MSG1
-            ldy         MSG2
-            movb        #2,LEDS
-            jsr         CARGAR_LCD
 
-GO2CONFIG:
-            jsr         MODO_CONFIG
-            bra         MAIN_LOOP
+nochange`
+            brclr BANDERAS,$08,chknodoM0
+chknodoM1:
+            brclr BANDERAS,$10,jmodoconfig`
+            bclr BANDERAS,$10
+            movb #$02,LEDS
+            movb CantPQ,BIN1
+            movb #0,BIN2
+            movb #0,AcmPQ
+            movb #0,CUENTA
+            bclr PORTE,$04
+            ldx #MESS1
+            ldy #MESS2
+            jsr CARGAR_LCD
+            
 
-; *****************************************************************************
-;                        MODO_CONFIG Subroutine
-; *****************************************************************************
-MODO_CONFIG:
-            loc
-            bclr        PIEH,$03
-            brclr       BANDERAS,$04,GO2TAREATECLADO
-            jsr         BCD_BIN
-            bclr        BANDERAS,$04
-            ldaa        CantPQ
-            cmpa        #90
-            bgt         resetCantPQ`
-            cmpa        #20
-            blt         resetCantPQ`
-            movb        CantPQ,BIN1
-            movb        #0,BIN2
-            bra         return`
-GO2TAREATECLADO:
-            jsr         TAREA_TECLADO
-            bra         return`
-resetCantPQ`:
-            clr         CantPQ
-return`:
-            rts
+jmodoconfig`
+            jsr MODO_CONFIG
+                bra returnmain
+chknodoM0:
+            brclr BANDERAS,$10,jmodorun`
+                bclr BANDERAS,$10
+                movb #$01,LEDS
+                ldx #MESS3
+                ldy #MESS4
+                jsr CARGAR_LCD
+jmodorun`
+            jsr MODO_RUN
+              
+returnmain:     
+                jmp mainL
 
 
+
+                
+                
+;       Subrutinas Generales
 ; *****************************************************************************
-;                        MODO_RUN Subroutine
-; *****************************************************************************
-MODO_RUN:   
-            loc    
-            bset        PIEH,$03
-            ldaa        CantPQ
-            cmpa        CUENTA
-            beq         return`
-            tst         TIMER_CUENTA
-            bne         return`
-            movb        CantPQ,TIMER_CUENTA
-            inc         CUENTA
-            cmpa        CUENTA
-            bne         return`
-            inc         AcmPQ
-            bset        PORTE,$04
-            ldaa        AcmPQ
-            cmpa        #100
-            bne         return`
-            movb        #0,AcmPQ
-return`:
-            movb         CUENTA,BIN1
-            movb         AcmPQ,BIN2
-            rts
 
 ; *****************************************************************************
 ;                        TAREA_TECLADO Subroutine
@@ -286,39 +214,32 @@ TAREA_TECLADO:
             bne         RETURN_TT
         ;Go to MUX_TECLADO    
             jsr         MUX_TECLADO
-            ldaa        Tecla
+            ldaa        TECLA
             cmpa        #$FF
             beq         CHECK_ARRAY
             brclr       Banderas,$02,REBOTES
-            cmpa        Tecla_IN
+            cmpa        TECLA_IN
             bne         TCL_NOT_READY
         ; TCL_LISTA = 1
             bset        Banderas,$01
-            bra         RETURN_TT
+            jmp         RETURN_TT
 
 TCL_NOT_READY:
-            movb        #$FF,Tecla
-            movb        #$FF,Tecla_IN
-            bclr        Banderas,$03
-            bra         RETURN_TT
+            movb        #$FF, TECLA
+            movb        #$FF, TECLA_IN
+            bclr        Banderas, $03
+            jmp         RETURN_TT
 
 REBOTES:
-            movb        Tecla,Tecla_IN
+            movb        TECLA, TECLA_IN
         ; TCL_LEIDA = 1
             bset        Banderas,$02
-            movb        #10,Cont_Reb
-            bra         RETURN_TT
+            movb        #$0A, Cont_Reb
+            jmp         RETURN_TT
 
 CHECK_ARRAY:
             brclr       Banderas,$01,RETURN_TT
-            bclr        Banderas,$03
-            ; Print Tecla value
-            ldab        Tecla_IN
-            cmpb        #$FF
-            beq         RETURN_TT
-            ldx         #0
-            ldd         #MSGA
-            jsr         [PrintF,X]
+            bclr        Banderas, $03
             jsr         FORMAR_ARRAY
 
 RETURN_TT:      
@@ -344,6 +265,9 @@ READ_LOOP:
             nop
             nop
             nop
+            nop
+            nop
+            nop
         ; check col 0 of port A
             brclr       PORTA,$01,WR_TECLA
             incb
@@ -354,17 +278,16 @@ READ_LOOP:
             brclr       PORTA,$04,WR_TECLA
             incb
             lsl         Patron
-            ldaa        Patron
-            cmpa        #$F0
+            ldaa        #$F0
+            cmpa        Patron
             bne         READ_LOOP
         ; If no key was pressed
-            movb        #$FF,TECLA
-            bra         RETURN_MUX
+            movb        #$FF,Tecla
+            rts
 
         ; If a key was pressed
 WR_TECLA:
             movb        B,X,Tecla
-RETURN_MUX:
             rts
 
 
@@ -392,7 +315,9 @@ CHECK_B:
             bne         CHECK_E
 
 COMPARE_B:
-            dec         Cont_TCL
+            decb
+            stab        Cont_TCL
+            movb        #$FF,B,X
             jmp         RETURN_FA
 
 CHECK_E:
@@ -402,6 +327,7 @@ CHECK_E:
 COMPARE_E:
         ; ARRAY_OK = 1
             bset        Banderas,$04
+            clr         Cont_TCL
             jmp         RETURN_FA
 
 CATCH_EORB:
@@ -417,134 +343,7 @@ ADD_ARRAY:
             inc         Cont_TCL
 
 RETURN_FA
-            movb        #$FF,TECLA_IN
             rts
-
-
-; *****************************************************************************
-;                            BCD_BIN Subrutine
-; *****************************************************************************
-;       BCD_BIN
-BCD_BIN:        
-            loc
-            ldx         #NUM_ARRAY
-            ldaa        1,X
-            cmpa        #$FF
-        ;Check for $FF
-            beq         wrong`
-            ldaa        #0
-loop`
-            cmpa        #0
-            beq         mul10`
-            addb        A,X    
-            bra         sumA`
-mul10`
-            ldab        A,X
-            lslb
-            lslb
-        ;mult by 8
-            lslb        
-            addb        A,X
-        ;mult by 10
-            addb        A,X    
-sumA`
-            movb        #$FF,A,X
-            inca
-            cmpa        MAX_TCL
-            bne         loop`
-            stab        CantPQ
-            bra         return`
-wrong`
-            movb        #$FF,NUM_ARRAY
-            movb        #$0,CantPQ
-return`
-            rts
-
-
-; *****************************************************************************
-;                            BCD_7SEG Subrutine
-; *****************************************************************************
-BCD_7SEG:       
-            loc
-            ldx         #SEGMENT
-            ldy         #DISP1
-            clra
-            ldab        BCD1
-            bra set_disps`
-loadBCD2`:
-            ldab        BCD2
-set_disps`:
-            pshb 
-            andb        #$0F
-        ; move lower bcd to disp1 or disp 3
-            movb        B,X,1,Y+      
-            pulb 
-            lsrb
-            lsrb
-            lsrb
-            lsrb
-        ; move lower bcd to disp2 or disp4
-            movb        B,X,1,Y+     
-        ;check DISP3    
-            cpy         #DISP3
-            beq         loadBCD2`
-return`:
-            rts
-
-
-; *****************************************************************************
-;                            CONV_BIN_BCD Subrutine
-; *****************************************************************************
-CONV_BIN_BCD:
-            loc
-            ldaa        BIN1
-            movb        #0,DT
-            jmp         BIN_BCD
-RETURN1:
-            movb        BCD_L,BCD1
-            ldaa        BIN2
-            movb        #1,DT
-            jmp         BIN_BCD
-RETURN2:
-            movb        BCD_L,BCD2
-            rts
-
-
-; *****************************************************************************
-;                            BIN_BCD Subrutine
-; *****************************************************************************
-BIN_BCD:    
-            loc
-            ldab        #3
-            clr         BCD_L
-loop1`:            
-            lsla
-            rol         BCD_L
-            staa        TEMP
-            ldaa        BCD_L
-            anda        #$0F
-            cmpa        #5
-            bcs         to_low`
-            adda        #3
-to_low`:    
-            staa        LOW
-            ldaa        BCD_L
-            anda        #$F0
-            cmpa        #$50
-            bcs         next`
-            adda        #$30
-next`:
-            adda        LOW
-            staa        BCD_L
-            ldaa        TEMP
-            dbne        B,loop1`
-        ; exit
-            lsla
-            rol         BCD_L
-            ldaa        TEMP
-            tsta
-            beq         RETURN1
-            bra         RETURN2                  
 
 
 ; *****************************************************************************
@@ -554,7 +353,7 @@ CARGAR_LCD:
             loc
             pshx        
         ;  TODO: PRINT     
-            ldx         #iniDisp
+            ldx         #iniDsp
             ldab        #4
 loop1`:
             ldaa        1,X+
@@ -563,6 +362,7 @@ loop1`:
             movb        D40uS,Cont_Delay
             jsr         Delay
             dbne        B,loop1`
+            clr         SendData
             ldaa        Clear_LCD
             jsr         SEND
             movb        D2mS,Cont_Delay
@@ -570,7 +370,7 @@ loop1`:
         ; LINE1    
             pulx
             ldaa        ADD_L1
-            movb        #1,SendData
+            clr         SendData
             jsr         SEND
             movb        D40uS,Cont_Delay
             jsr         Delay
@@ -578,13 +378,14 @@ loop2`:
             ldaa        1,X+
             cmpa        #FIN
             beq         LINE2`
+            movb        #1,SendData
             jsr         SEND
             movb        D40uS,Cont_Delay
             jsr         Delay
             bra         loop2`
 LINE2`:
             ldaa        ADD_L2
-            movb        #1,SendData
+            clr         SendData
             jsr         SEND
             movb        D40us,Cont_Delay
             jsr         Delay
@@ -598,15 +399,6 @@ loop3`:
             jsr         Delay
             bra         loop3`
 return`:
-            rts
-            
-
-; *****************************************************************************
-;                            Delay Subrutine
-; *****************************************************************************
-Delay:
-            tst         Cont_Delay
-            bne         Delay
             rts
 
 
@@ -649,6 +441,184 @@ clearK1`:
 clearK2`:
             bclr        PORTK,$01
             bra         merge2`
+    
+
+; *****************************************************************************
+;                            Delay Subrutine
+; *****************************************************************************
+Delay:
+            tst         Cont_Delay
+            bne         Delay
+            rts
+
+
+; *****************************************************************************
+;                            BCD_7SEG Subrutine
+; *****************************************************************************
+BCD_7SEG:       
+            loc
+            ldx         #SEGMENT
+            ldy         #DISP1
+            clra
+            ldab        BCD1
+            bra set_disps`
+loadBCD2`:
+            ldab        BCD2
+set_disps`:
+            pshb 
+            andb        #$0F
+        ; move lower bcd to disp1 or disp 3
+            movb        B,X,1,Y+      
+            pulb 
+            lsrb
+            lsrb
+            lsrb
+            lsrb
+        ; move lower bcd to disp2 or disp4
+            movb        B,X,1,Y+     
+        ;check DISP3    
+            cpy         #DISP3
+            beq         loadBCD2`
+return`:
+            rts
+
+
+
+
+;       BIN_BCD
+                loc
+CONV_BIN_BCD:   ldab #14
+                movb #0,BCD_L
+                ldaa BIN1   ;inicio con bcd1
+                ldx #BCD_L    
+                bra loop`
+changeBCD`      lsla
+                rol 0,X
+                ldaa BIN2   ;continua con bcd2
+                movb BCD_L,BCD1
+                movb #0,BCD_L    
+loop`           lsla
+                rol 0,X
+                staa TEMP
+                ldaa 0,X
+                anda #$0F
+                cmpa #5
+                blt continue1`
+                adda #3
+continue1`      staa LOW 
+                ldaa 0,X
+                anda #$F0
+                cmpa #$50
+                blt continue2`
+                adda #$30
+continue2`      adda LOW
+                staa 0,X
+                ldaa TEMP
+                decb
+                cmpb #7
+                beq changeBCD`
+                cmpb #$0 
+                bne loop`
+                lsla
+                rol 0,X
+                movb BCD_L,BCD2                             
+                rts
+
+; *****************************************************************************
+;                            BCD_BIN Subrutine
+; *****************************************************************************
+;       BCD_BIN
+BCD_BIN:        
+            loc
+            ldx         #NUM_ARRAY
+            ldaa        1,X
+            cmpa        #$FF
+        ;Check for $FF
+            beq         wrong`
+            ldaa        #0
+loop`
+            cmpa        #0
+            beq         mul10`
+            addb        A,X    
+            bra         sumA`
+mul10`
+            ldab        A,X
+            lslb
+            lslb
+        ;mult by 8
+            lslb        
+            addb        A,X
+        ;mult by 10
+            addb        A,X    
+sumA`
+            movb        #$FF,A,X
+            inca
+            cmpa        MAX_TCL
+            bne         loop`
+            stab        CantPQ
+            bra         return`
+wrong`
+            movb        #$FF,NUM_ARRAY
+            movb        #$0,CantPQ
+return`
+            rts
+
+
+; *****************************************************************************
+;                        MODO_CONFIG Subroutine
+; *****************************************************************************
+MODO_CONFIG:
+            loc
+            bclr        PIEH,$03
+            brclr       BANDERAS,$04,GO2TAREATECLADO
+            jsr         BCD_BIN
+            bclr        BANDERAS,$04
+            ldaa        CantPQ
+            cmpa        #90
+            bgt         resetCantPQ`
+            cmpa        #20
+            blt         resetCantPQ`
+            movb        CantPQ,BIN1
+            movb        #0,BIN2
+            bra         return`
+GO2TAREATECLADO:
+            jsr         TAREA_TECLADO
+            bra         return`
+resetCantPQ`:
+            clr         CantPQ
+return`:
+            rts
+
+
+
+; *****************************************************************************
+;                        MODO_RUN Subroutine
+; *****************************************************************************
+MODO_RUN:   
+            loc    
+            bset        PIEH,$03
+            ldaa        CantPQ
+            cmpa        CUENTA
+            beq         return`
+            tst         TIMER_CUENTA
+            bne         return`
+            movb        CantPQ,TIMER_CUENTA
+            inc         CUENTA
+            cmpa        CUENTA
+            bne         return`
+            inc         AcmPQ
+            bset        PORTE,$04
+            ldaa        AcmPQ
+            cmpa        #100
+            bne         return`
+            movb        #0,AcmPQ
+return`:
+            movb         CUENTA,BIN1
+            movb         AcmPQ,BIN2
+            rts
+
+
+
 
 
 ; ************************************ISR*************************************
@@ -661,22 +631,21 @@ PTH_ISR:
             brset       PIFH,$02,PH1
             brset       PIFH,$04,PH2
             brset       PIFH,$08,PH3
-            ldx         #0
-            ldd         #MSG0
-            jsr         [PrintF,X]
 PH0:
             bset        PIFH,$01
-            brclr       Cont_Reb,$FF,RETURN_PTH
+            tst               Cont_Reb
+            bne                RETURN_PTH
             clr         CUENTA
-            movb        #25,Cont_Reb
+            movb        #50,Cont_Reb
             ;stop relay
             bclr        PORTE,$04
             bra         RETURN_PTH
 PH1:
             bset        PIFH,$02
-            brclr       Cont_Reb,$FF,RETURN_PTH
+            tst               Cont_Reb
+            bne                RETURN_PTH
             clr         AcmPQ
-            movb        #25,Cont_Reb
+            movb        #50,Cont_Reb
             ;stop relay
             bclr        PORTE,$04
             bra         RETURN_PTH
@@ -723,29 +692,29 @@ OC4_ISR:
             ldab        #100
             subb        BRILLO
             cba
-            beq         OFF`
+            beq         apagar`
             tst         CONT_TICKS
             beq         check_digit`
-CHECK_N`         
+checkN`
             cmpa        #100
-            beq         CHANGE_DIG`
-INC_TICKS`
+            beq         changeDigit`
+incticks`
             inc         CONT_TICKS
-            jmp         CHK_DELAY
-;OFF
-OFF`
+            jmp         part2`
+;Apagar
+apagar`
             movb        #$FF,PTP
             movb        #$0, PORTB
-            bra         CHECK_N`
-CHANGE_DIG`
+            bra         checkN`
+changeDigit`
             movb        #$0,CONT_TICKS
             ldaa        #5
             cmpa        CONT_DIG
-            bne         GO2_CHK_DELAY 
+            bne         jpart2`
             clr         CONT_DIG
-GO2_CHK_DELAY
+jpart2`
             inc         CONT_DIG
-            bra         CHK_DELAY
+            bra         part2`
 check_digit`
             ldaa        CONT_DIG
             cmpa        #1
@@ -753,52 +722,54 @@ check_digit`
             bclr        PTP, $08
             movb        DISP1, PORTB
             bset        PTJ, $02
-            bra         INC_TICKS`
+            bra         incticks`
 dig2`
             cmpa        #2
             bne         dig3`
             bclr        PTP, $04
             ldaa        DISP2
             cmpa        #$3F
-            beq         INC_TICKS`
+            beq         ndig2`
             movb        DISP2, PORTB
             bset        PTJ, $02
-            bra         INC_TICKS`
+ndig2`
+            bra         incticks`
 dig3`
             cmpa        #3
             bne         dig4`
-            bclr        PTP, $02                
-            brset       BANDERAS,$08,INC_TICKS`
+            bclr        PTP, $02
+            brset       BANDERAS,$08,ndig3`
             movb        DISP3, PORTB
             bset        PTJ, $02
-            bra         INC_TICKS`
+ndig3`
+            bra         incticks`
 dig4`
             cmpa        #4
             bne         digleds`
             bclr        PTP, $01
-            brset       BANDERAS,$08,negdig4`
+            brset       BANDERAS,$08,ndig4`
             ldaa        DISP4
             cmpa        #$3F
-            beq         negdig4`
+            beq         ndig4`
             movb        DISP4, PORTB
             bset        PTJ, $02
-negdig4`
-            jmp         INC_TICKS`
+ndig4`
+            jmp         incticks`
 digleds`
             movb        LEDS, PORTB
             bclr        PTJ, $02
             inc         CONT_TICKS
 
-CHK_DELAY
+part2`
             tst         CONT_DELAY
-            beq         chk7seg`
+            beq         tst7seg`
             dec         CONT_DELAY
-chk7seg`
+tst7seg`
             ldx         CONT_7SEG
             beq         JBCD_7SEG`
             dex
             stx         CONT_7SEG
-RETURN`
+returnOC4
             ldd         TCNT
             addd        #60
             std         TC4
@@ -806,4 +777,5 @@ RETURN`
 JBCD_7SEG`
             movw        #5000,CONT_7SEG
             jsr         BCD_7SEG
-            bra         RETURN`
+            jsr         CONV_BIN_BCD
+            bra         returnOC4
