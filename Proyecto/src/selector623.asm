@@ -6,16 +6,16 @@
 #include registers.inc
 ; *****************************************************************************
 ;*  Descripcion General:
-;* El siguiente código para la tarjeta dragon 12 plus 2 de FreeScale corresponde
-;* a un programa para un selector electrónico, denominado Selector 623, el cual
+;* El siguiente codigo para la tarjeta dragon 12 plus 2 de FreeScale corresponde
+;* a un programa para un selector electronico, denominado Selector 623, el cual
 ;* permite demarcar los tubos que alcancen una longitud de cumplimiento
 ;* programanda. Para esto cuenta con 3 modos:
-;*  - CONFIG para configuracion del parámetro LengthOK, esto se hace por medio 
+;*  - CONFIG para configuracion del parametro LengthOK, esto se hace por medio
 ;* del uso del teclado matricial de la tarjeta y los  displays de 7 segmentos 
 ;* para mostrar el valor LengthOK.
 ;*  - STOP: Muestra un mensaje de bienvenida en la pantalla LCD, se utiliza si 
 ;* no se desean relizar selecciones de tubos.
-;*  - SELECT: Se realiza la selección de los tubos conforme a la Descripcion
+;*  - SELECT: Se realiza la seleccion de los tubos conforme a la Descripcion
 ;* realizada.
 
 
@@ -28,8 +28,14 @@ LF:             equ $0A
 FIN:            equ $0
 
             org         $1000
-    ;-- BANDERAS
-BANDERA:        ds  2
+   ;-- BANDERA:     7:MODO1 , 6:MODO0, 5:Calc_TICKS, 4:ENB_TICK_MED, 3:Pant_flag
+   ;                2:ARRAY_OK_FLG , 1:TCL_LEIDA, 0:TCL_LISTA
+BANDERA:        ds  1
+
+   ;-- BANDERA_2:     1:CAMBIO_MOD, 0:ALERTA
+BANDERA_2:       ds  1
+
+
     ;-- MODO_CONFIG       
 LengthOK:       ds  1
 ValorLenght:    ds  1
@@ -134,9 +140,13 @@ A_MSG2:         fcc "FUERA DE RANGO"
                 ;org $3E70
                 dw RTI_ISR
                 
-                ;org  $FFCC
+                org  $FFCC
                 ;org $3E4C
-                ;dw PTH_ISR
+                dw CALCULAR_ISR
+
+                ;org $FFD2
+                ;org $3E52
+                ;dw ATD_ISR
 
                 org  $FFE6
                 ;org $3E66
@@ -146,9 +156,17 @@ A_MSG2:         fcc "FUERA DE RANGO"
                 ;org $3E5E
                 dw TCNT_ISR
 
+; *****************************************************************************
+; *                               Main                                        *
+; *****************************************************************************
+;   Descrip: Inicio del programa principal
+; *****************************************************************************
 
 ; *****************************************************************************
 ;                               HW Config
+; *****************************************************************************
+;   Descrip: configuración de diferentes puertos, interrupciones y registros
+;   de control, ademas se resetean mutiples varaibles.
 ; *****************************************************************************
             org             $2000
         ; PORTS
@@ -185,10 +203,7 @@ A_MSG2:         fcc "FUERA DE RANGO"
             movb        #$F0,DDRA
             bset        PUCR,$01
 
-; *****************************************************************************
-; *                          Main Program                                     *
-; *****************************************************************************
-
+        ; Beginning of the main program
             lds         #$3BFF
             clr         BCD1
             clr         BCD2
@@ -199,7 +214,6 @@ A_MSG2:         fcc "FUERA DE RANGO"
             clr         DISP2
             clr         DISP3
             clr         DISP4
-        ;       bset        PTIH,$80    
             clr         CONT_TICKS
             clr         CONT_DIG
             movb        #50,BRILLO
@@ -214,8 +228,29 @@ A_MSG2:         fcc "FUERA DE RANGO"
             ldx         #Num_Array-1
 ARRAY_RST:
             movb        #$FF,A,X
-            dbne        A,ARRAY_RST   
+            dbne        A,ARRAY_RST
+            
+; ATD0
+            movb        #$C2, ATD0CTL2
+            ldab        #200
+            ;loop de retardo para encender el convertidor
+loopIATD:
+            dbne        B,loopIATD         
+        ;5 mediciones
+            movb        #$21,ATD0CTL3     
+        ;8 bits, 2 ciclos de atd, PRS 23
+            movb        #$97,ATD0CTL4
+        ; no multiplex, pad7
+            movb        #$87,ATD0CTL5
+            bset        BANDERA_2,$02
+init_Loop:
+            jsr         MODO_CONFIG
+            tst         LengthOK
+            beq         init_Loop
 
+main_Loop:
+            
+            beq         *
 
 ; *****************************************************************************
 ;                        MODO_CONFIG Subroutine
@@ -223,12 +258,15 @@ ARRAY_RST:
 ; *****************************************************************************
 MODO_CONFIG:
             loc
+            brclr       BANDERA_2,$02,no_lcd`
             bclr        PIEH,$03
             clr         TICK_EN
             clr         TICK_DIS
             ldx         C_MSG1
             ldy         C_MSG2
+            movb        #1,LEDS
             jsr         CARGAR_LCD
+no_lcd`
             movb        LengthOK,BIN1
             jsr         TAREA_TECLADO
             brset       BANDERA,$04,return`
@@ -241,7 +279,6 @@ MODO_CONFIG:
             blo         reset`
             movb        ValorLenght,LengthOK
             movb        LengthOK,BIN1
-
 reset`
             clr         ValorLenght
 return`
@@ -249,6 +286,25 @@ return`
 
 
 ; *****************************************************************************
+;                        MODO_STOP Subroutine
+; *****************************************************************************
+MODO_STOP:
+            loc
+        ;TODO check dipswitches
+            ldaa        BANDERA
+            anda        #$C0
+            cmpa        #0
+            bne         return`
+            ldx         B_MSG1
+            ldy         B_MSG2
+            jsr         CARGAR_LCD
+            movb        #$BB,BIN1      
+            movb        #$BB,BIN2
+return`
+            rts
+
+
+;*****************************************************************************
 ;                        TAREA_TECLADO Subroutine
 ; *****************************************************************************
 TAREA_TECLADO:
@@ -643,16 +699,160 @@ RETURN`:
 ; *****************************************************************************
 ;                           ATD_ISR Subroutine
 ; *****************************************************************************
+;           Calcula BRILLO from POT
+; *****************************************************************************
+ATD0_ISR:
+            ldx         #5
+            ldd         ADR00H
+            addd        ADR01H
+            addd        ADR02H
+            addd        ADR03H
+            addd        ADR04H
+            idiv
+            tfr         X,D
+            stab        POT
+            ldaa        #20
+            ldx         #255
+            mul
+            idiv
+            tfr         X,D
+            stab        BRILLO          
+            rti
+
+; *****************************************************************************
+;                           CALCULAR_ISR Subroutine
+; *****************************************************************************
+;   Descrip: maneja las subrutinas PH
+; *****************************************************************************
+CALCULAR_ISR:
+            brset       PIFH,$01,PH0
+            brset       PIFH,$02,PH1
+            brset       PIFH,$04,PH2
+            brset       PIFH,$08,PH3
+
+; *****************************************************************************
+;                           PH0
+; *****************************************************************************
+;   Descrip: Calcula la velocidad de los tubos, así como los ticks necesarios
+;   para mostrar y borrar la pantalla.
+;   
+;   *Entrada:
+;   *Salida:
+; *****************************************************************************
+PH0:
+            bset        PIFH,$01
+            tst         Cont_Reb
+            bne         RETURN_PTH
+        ; Best value for buttons and keyboard
+            movb        #100,Cont_Reb
+            ldx         TICK_MED
+            beq         RETURN_PTH
+            cpx         #9
+        ; Avoid overflow
+            bhs         valid_Speed`
+            movb        #$FF,VELOC
+            movb        #$FF,LONG
+            bra         RETURN_PTH
+
+valid_Speed`
+        ; Calculate Veloc         
+            ldd         #50000              
+            idiv
+            tfr         X,D
+            ldx         #22
+            idiv
+            tfr         X,D
+            stab        VELOC  
+        ; Calculate LONG
+            ldaa        #22
+            mul              
+            ldx         #1000
+            ldy         TICK_MED
+            emul
+            ediv
+            tfr         X,D
+            stab        LONG  
+            bra         RETURN_PTH
 
 
 ; *****************************************************************************
-;                           CALCULAR Subroutine
+;                           PH1
 ; *****************************************************************************
+;   Descrip: Activa PIFH.1.
+;   
+;   *Entrada:
+;   *Salida:
+; *****************************************************************************
+PH1:
+            bset        PIFH,$02
+            bra         RETURN_PTH
+
+
+; *****************************************************************************
+;                           PH2
+; *****************************************************************************
+;   Descrip: Activa PIFH.2.
+;   
+;   *Entrada:
+;   *Salida:
+; *****************************************************************************
+PH2:
+            bset        PIFH,$04
+            bra         RETURN_PTH
+
+
+; *****************************************************************************
+;                           PH3
+; *****************************************************************************
+;   Descrip: Activa PIFH.3. Limpia TICK_MED y maneja Cont_Reb con un valor de
+;   100.
+;   
+;   *Entrada: Cont_Reb 
+;   *Salida:  BANDERA.3, BANDERA.2, Cont_Reb
+; *****************************************************************************
+PH3:
+            bset        PIFH,$08
+            ldaa        Cont_Reb
+            bne         RETURN_PTH
+            movb        #100,Cont_Reb
+            clr         TICK_MED
+            bset        BANDERA,$0C            
+RETURN_PTH:
+            rti
 
 
 ; *****************************************************************************
 ;                           TCNT_ISR Subroutine
 ; *****************************************************************************
+TCNT_ISR:
+            loc
+            ldd         TCNT
+            movb        #$FF,TFLG2
+            ldaa        TICK_MED
+            cmpa        #255
+            beq         chk_en`
+            brclr       BANDERA,$10,chk_en`
+            inc         TICK_MED
+chk_en`
+            tst         VELOC
+            beq         return`
+            ldx         TICK_EN
+        ; When TICK_EN = $0000, on next run dex makes it $FFFF
+            dex
+            bne         No_Set`
+            bset        BANDERA,$08
+No_Set`
+            stx         TICK_EN
+            ldx         TICK_DIS
+        ; When TICK_DIS = $0000, on next run dex makes it $FFFF
+            dex
+            bne         No_Clr`
+            bclr        BANDERA,$08
+No_Clr`
+            stx         TICK_DIS
+return`
+            rti        
+
 
 
 ; *****************************************************************************
