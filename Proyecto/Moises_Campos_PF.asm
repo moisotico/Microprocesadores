@@ -95,9 +95,9 @@ SendData:       ds  1
             org         $1040
 Teclas:         db  $01,$02,$03,$04,$05,$06,$07,$08,$09,$0B,$00,$0E
             org         $1050
-SEGMENT:        db  $3F,$06,$5B,$4F,$66,$6D,$7D,$07,$7F,$6F,$40,$00
+SEGMENT:        db  $3F,$06,$5B,$4F,$66,$6D,$7D,$07,$7F,$6F
             org         $1060
-initDisp:       db  $28,$28,$06,$0C
+initDisp:        db  $28,$28,$06,$0C
 
             org     $1070
 ; Mensaje de Config
@@ -136,8 +136,8 @@ A_MSG2:         fcc "FUERA DE RANGO"
 ; *****************************************************************************
 ;                       Interruption Vector Relocation
 ; *****************************************************************************
-                org  $FFF0
-                ;org $3E70
+                ;org  $FFF0
+                org $3E70
                 dw RTI_ISR
                 
                 ;org  $FFCC
@@ -188,16 +188,15 @@ A_MSG2:         fcc "FUERA DE RANGO"
             cli
 
         ; Ctrl registers and timer enable
-            movb        #$80,TSCR1 
-            movb        #$03,TSCR2
-            movb        #$10,TIOS
-            movb        #$10,TIE
-            movb        #$01,TCTL1
-            bclr        TCTL2,$FF
+            bset        TSCR1,$90 
+            bset        TSCR2,$03
+            bset        TIOS,$10
+            bset        TIE,$10
+            bset        TCTL1,$01
+            bset        TCTL2,$00
             ldd         TCNT
             addd        #60
             std         TC4
-        ; for LCD screen
             movb        #$FF,DDRK
 
         ; PORTA + Pullup resistors     
@@ -210,7 +209,7 @@ A_MSG2:         fcc "FUERA DE RANGO"
             clr         BCD2
             clr         BIN1
             clr         BIN2
-            movb        #1,LEDS
+            clr         LEDS
             clr         DISP1
             clr         DISP2
             clr         DISP3
@@ -222,7 +221,6 @@ A_MSG2:         fcc "FUERA DE RANGO"
             movb        #$FF,Tecla_IN
             clr         Cont_Reb
             clr         Cont_TCL
-            clr         LONG
             clr         Patron
             clr         BANDERA
             bset        BANDERA,$10
@@ -235,11 +233,11 @@ ARRAY_RST:
 ; ATD0
             movb        #$C2, ATD0CTL2
             ldab        #200
-        ;wait for ATD for 10 us via loop
+            ;loop de retardo para encender el convertidor
 loopIATD:
             dbne        B,loopIATD         
         ;5 mediciones
-            movb        #$28,ATD0CTL3     
+            movb        #$21,ATD0CTL3     
         ;8 bits, 2 ciclos de atd, PRS 23
             movb        #$97,ATD0CTL4
         ; no multiplex, pad7
@@ -285,9 +283,11 @@ DISABLE_H:
             jmp         MAIN_LOOP
 
 GO2STOP:
+
             bclr        BANDERA,$C0
             jsr         MODO_STOP
             jmp         MAIN_LOOP
+
 
 
 ; *****************************************************************************
@@ -306,7 +306,6 @@ MODO_CONFIG:
             jsr         CARGAR_LCD
 no_lcd`
             movb        LengthOK,BIN1
-            movb        #$BB,BIN2 
             jsr         TAREA_TECLADO
             brset       BANDERA,$04,return`
             jsr         BCD_BIN
@@ -345,7 +344,6 @@ return`
 
 ; *****************************************************************************
 ;                        MODO_SELECT Subroutine
-;           TODO: Check differences
 ; *****************************************************************************
 MODO_SELECT:
             loc
@@ -359,8 +357,7 @@ MODO_SELECT:
             movb        #$BB,BIN1      
             movb        #$BB,BIN2
             movb        #$09,PIEH
-        ;activate TOI
-            movb        #$83,TSCR2  
+            bset        TSCR2,$80
             jsr         CARGAR_LCD
 chk_veloc`
             tst         VELOC
@@ -376,29 +373,18 @@ return`
 PANT_CTRL:
             loc
             bclr        PIEH,$09
-            bclr        PIFH,$09
+            bset        PIFH,$09
         ; Check VELOC range
             ldaa        VELOC
             cmpa        #50
             bgt         rng_error`
             cmpa        #10
             blt         rng_error`
-            brset       BANDERA,$20,next2`
-            bset        BANDERA,$20
-            ldx         VELOC
-            ldd         LONG
-            ldy         #1000
-            emul
-            ediv
-            tfr         Y,D
-            ldx         #23
-            idiv
-            tfr         X,D
-            lsrd
-            std         TICK_EN
-            addd        #87
-            std         TICK_DIS
-            jmp         return`
+            ldaa        Calc_TICKS
+            bne         next2`
+            movb        #1,Calc_TICKS
+
+            
 rng_error`
         ;Levantar Alerta si es mayor a la velocidad limite
             cmpa        #$AA
@@ -412,12 +398,15 @@ rng_error`
             ldy         A_MSG2
             jsr         CARGAR_LCD
             rts
+
 next`
             brset       BANDERA,$08,return`  
             jmp         info`       
+
 next2`
             brset       BANDERA,$08,chk_BIN1_a`  
             jmp         chk_BIN1_b`       
+
 chk_BIN1_a`
             ldaa        BIN1
             cmpa        #$BB
@@ -432,25 +421,29 @@ all_good`
             bset        PORTE,$04
             ldx         E_MSG1
             ldy         E_MSG2
+
 load_LCD`   
             jsr         CARGAR_LCD
             movb        LONG,BIN1
             movb        VELOC,BIN2
             jmp         return`
+
 chk_BIN1_b`
             ldaa        BIN1
             cmpa        #$BB
             beq         return`
 info`
-            ldx         I_MSG1
-            ldy         I_MSG2
+            ldx         I_MSG3
+            ldy         I_MSG4
             jsr         CARGAR_LCD
             movw        #$BB,BIN1
             movw        #$BB,BIN2
             bset        PIEH,$09
             bset        PIFH,$09
+
 return`
             rts
+
 
 
 ;*****************************************************************************
@@ -531,6 +524,7 @@ READ_LOOP:
         ; If no key was pressed
             movb        #$FF,TECLA
             bra         RETURN_MUX
+
         ; If a key was pressed
 WR_TECLA:
             movb        B,X,Tecla
@@ -544,7 +538,8 @@ RETURN_MUX:
 FORMAR_ARRAY:
             ldx         #Num_Array
             ldaa        TECLA_IN
-            ldab        Cont_TCL        
+            ldab        Cont_TCL
+        
         ; check for full array   
             cmpb        MAX_TCL
             beq         CHECK_B
@@ -668,7 +663,6 @@ GO2_BB2`
 return`
             rts
 
-
 ; *****************************************************************************
 ;                           BIN_BCD Subrutine
 ; *****************************************************************************
@@ -706,7 +700,6 @@ continue2`
             rol         0,X
             movb        BCD_L,BCD2                             
             rts
-
 
 ; *****************************************************************************
 ;                            BCD_7SEG Subrutine
@@ -836,6 +829,7 @@ clearK2`:
             bra         merge2`
 
 
+
 ; *****************************************************************************
 ;                            Delay Subrutine
 ; *****************************************************************************
@@ -871,7 +865,6 @@ CHK_ROC`
 RETURN`:
             rti
 
-
 ; *****************************************************************************
 ;                           ATD_ISR Subroutine
 ; *****************************************************************************
@@ -897,7 +890,6 @@ ATD_ISR:
             mul
             stab        DT          
             rti
-
 
 ; *****************************************************************************
 ;                           CALCULAR_ISR Subroutine
@@ -930,8 +922,8 @@ PH0:
             cpx         #9
         ; Avoid overflow
             bhs         valid_Speed`
-            movb        #$00,VELOC
-            movb        #$00,LONG
+            movb        #$FF,VELOC
+            movb        #$FF,LONG
             bra         RETURN_PTH
 
 valid_Speed`
@@ -954,6 +946,7 @@ valid_Speed`
             stab        LONG  
             bra         RETURN_PTH
 
+
 ; *****************************************************************************
 ;                           PH1
 ; *****************************************************************************
@@ -966,6 +959,7 @@ PH1:
             bset        PIFH,$02
             bra         RETURN_PTH
 
+
 ; *****************************************************************************
 ;                           PH2
 ; *****************************************************************************
@@ -977,6 +971,7 @@ PH1:
 PH2:
             bset        PIFH,$04
             bra         RETURN_PTH
+
 
 ; *****************************************************************************
 ;                           PH3
@@ -996,6 +991,7 @@ PH3:
             bset        BANDERA,$0C            
 RETURN_PTH:
             rti
+
 
 ; *****************************************************************************
 ;                           TCNT_ISR Subroutine
@@ -1028,6 +1024,7 @@ No_Clr`
             stx         TICK_DIS
 return`
             rti        
+
 
 
 ; *****************************************************************************

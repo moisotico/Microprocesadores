@@ -1,6 +1,7 @@
-*.png
+.png
 *.PNG
 *.sym
 *.lst
 *.s19
 *.mp4
+*.drawio

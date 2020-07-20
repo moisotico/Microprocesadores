@@ -48,7 +48,7 @@ DISP4:           ds  1
 CONT_7SEG:       ds  2
 Cont_Delay:      ds  1
 D2mS:            db  100
-D240uS:          db  12
+D240uS:          db  13
 D60uS:           db  3
 Clear_LCD:       db  $01
 ADD_L1:          db  $80
