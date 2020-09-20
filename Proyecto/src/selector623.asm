@@ -136,8 +136,8 @@ A_MSG2:         fcc "FUERA DE RANGO"
 ; *****************************************************************************
 ;                       Interruption Vector Relocation
 ; *****************************************************************************
-                org  $FFF0
-                ;org $3E70
+                ;org  $FFF0
+                org $3E70
                 dw RTI_ISR
                 
                 ;org  $FFCC
@@ -296,7 +296,9 @@ GO2STOP:
 MODO_CONFIG:
             loc
             brclr       BANDERA_2,$02,no_lcd`
-            bclr        PIEH,$03
+        ;Deactivate H port interruption 
+            bclr        PIEH,$09
+            bset        PIFH,$09
             clr         TICK_EN
             clr         TICK_DIS
             bclr        BANDERA_2,$02
@@ -308,9 +310,9 @@ no_lcd`
             movb        LengthOK,BIN1
             movb        #$BB,BIN2 
             jsr         TAREA_TECLADO
-            brset       BANDERA,$04,return`
-            jsr         BCD_BIN
+            brclr       BANDERA,$04,return`
             bclr        BANDERA,$04
+            jsr         BCD_BIN
             ldaa        ValorLenght
             cmpa        #100
             bhi         reset`
@@ -318,8 +320,11 @@ no_lcd`
             blo         reset`
             movb        ValorLenght,LengthOK
             movb        LengthOK,BIN1
+            jmp         return`
 reset`
             clr         ValorLenght
+reset2`
+
 return`
             rts
 
@@ -365,7 +370,7 @@ MODO_SELECT:
 chk_veloc`
             tst         VELOC
             beq         return`
-            ;jsr         PANT_CTRL
+            jsr         PANT_CTRL
 return`
             rts
 
@@ -1050,7 +1055,7 @@ incticks`
 off`
             movb        #$FF,PTP
             bclr        PTJ,$02
-            clr         PORTB
+            movb        LEDS,PORTB
             bra         chk_N`
 chnge_dgt`
             clr         CONT_TICKS
@@ -1064,7 +1069,7 @@ jpart2`
 check_digit`
             ldaa        CONT_DIG
             ldx         #DISP1
-            movb        A,X,PORTB
+            ;movb        A,X,PORTB
             bset        PTJ, $02
             tsta
             bne         dig2`
