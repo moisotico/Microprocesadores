@@ -116,7 +116,7 @@ BCD_BIN:
                 clr                 NUM_BIN+1
         ; First 4 bits
                 andb                #$0F
-                sty                 NUM_BIN+1
+                stab                NUM_BIN+1
         ; Second group of 4 bits
                 ldab                BCD+1
                 andb                #$F0
