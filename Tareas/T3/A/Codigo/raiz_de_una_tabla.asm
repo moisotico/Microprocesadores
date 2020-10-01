@@ -4,7 +4,7 @@
 ; Tarea #3 
 ; Nota: el codigo se comento en ingles
 ; *****************************************************************************
-;                       Data Structures Declaration
+;                           Data Structures
 ; *****************************************************************************
 ; $1000,  CANT en $1001, CONT en $1002, y ENTERO en $101
 
