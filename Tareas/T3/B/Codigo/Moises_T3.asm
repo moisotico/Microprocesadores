@@ -6,7 +6,7 @@
 ; *****************************************************************************
 ;                       Data Structures Declaration
 ; *****************************************************************************
-; $1000,  CANT en $1001, CONT en $1002, y ENTEROS en $101
+; $1000,  CANT en $1001, CONT en $1002, y ENTERO en $101
 
 ; Subroutine direction pointers
 PrintF:     equ     $EE88
@@ -24,7 +24,7 @@ CONT:       ds      1
 CONT_B:     ds      1
 
             org         $1010
-ENTERO:     ds       100
+ENTERO:     ds      12
 
             org         $1020
 DATOS:      db      4,9,18,4,27,63,12,32,36,15,49,64
@@ -61,10 +61,10 @@ MSG2:       fcc "CANTIDAD DE VALORES ENCONTRADOS: %i"
 MSG3:       fcc "VALORES EN ENTERO: "
             fcb FIN
 
-MSG5:       fcc "%i, "
+MSG4:       fcc "%i, "
             fcb LF, FIN
 
-MSG6:       fcc "%i"
+MSG5:       fcc "%i"
             fcb CR,CR,LF,FIN
 
 ERR0:       fcc "ERROR: LA TECLA INGRESADA NO ES VALIDA!"
@@ -85,6 +85,7 @@ ERR1:       fcc "ERROR: EL VALOR $00 NO ES VALIDO!"
                 jsr         [PrintF,X]
                 clra
                 clrb
+                clr         CONT
             ; Subroutines
                 jsr         LEER_CANT
                 jsr         BUSCAR
@@ -172,11 +173,10 @@ CATCH_2:
 BUSCAR:
                 ldx         #DATOS
                 ldy         #CUAD
-                movb        #ENTERO,TEMP
-                clr         CONT_B
-                clrb
+                ldd         #0
+                clr         CONT_B                
 LOOP_BUSCAR:
-        ; A = (CANT) || A = (LONG)
+            ; A = (CANT) || A = (LONG)
                 ldaa        CONT_B
                 cmpa        CANT
                 beq         RETURN_BUSCAR
@@ -187,29 +187,27 @@ LOOP_BUSCAR:
                 ldab        0,Y
                 cba
                 beq         MATCH
-            ; biggest number in CUAD    
                 cmpb        #225
             ; No Match        
-                beq         INCR_DATA
+                beq         INCREASE
                 iny
                 bra         LOOP_BUSCAR
-MATCH:      
+MATCH:
                 pshx      
                 psha
                 jsr         RAIZ
                 pula
                 pulx
-                ldy         TEMP
+                ldy         #ENTERO
                 ldab        CONT
-                staa        B,Y
+                staa        B,Y        
                 iny
-                sty         TEMP        
                 inc         CONT
-INCR_DATA:
+INCREASE:
                 inx
                 ldy         #CUAD
                 inc         CONT_B
-                jmp         LOOP_BUSCAR
+                bra         LOOP_BUSCAR
 RETURN_BUSCAR:
                 rts 
 
@@ -217,74 +215,72 @@ RETURN_BUSCAR:
 ;                           Subroutine  RAIZ
 ; *****************************************************************************
 RAIZ:
-        ; SP stack pull
-            puly
-            pulb
-            clra
-        ; X = 1
-            ldx        #1
-            std        TEMP_2
+            ; SP stack pull
+                puly
+                pulb
+                clra
+                clr         TEMP_1
+            ; X = 1
+                ldx         #1
+                std         TEMP_2
 BABYLON:
-            cpd
-        ; b value of algorithm
-            leax        D,X
-            xgdx
-            lsrd
-            xgdx
-            stx         TEMP_2
-        ; h value of algorithm, X = TEMP_1 / b value
-            ldd         TEMP_1        
-            idiv
-            ldd         TEMP_2
-        ; b = h ?
-            cpx         TEMP_2
-            beq         RETURN_RAIZ
-            jmp         BABYLON
-
+                cpx         TEMP_1
+                beq         RETURN_RAIZ
+            ; b value of algorithm
+                ldd         TEMP_1
+                abx
+                xgdx
+                lsrd
+                xgdx
+                stx         TEMP_1
+            ; h value of algorithm, X = TEMP_2 / b value
+                ldd         TEMP_2        
+                idiv
+                bra         BABYLON
 RETURN_RAIZ:
-        ; SP stack push
-            pshb
-            pshy
-            rts
-
+            ; SP stack push
+                xgdx
+                pshb
+                pshy
+                rts
 
 ; *****************************************************************************
 ;                           Subroutine  Print_RESULT
 ; *****************************************************************************
-            loc
+                loc
 Print_RESULT:
-            ldab        CONT
-            ldaa        #0
-            pshd
-            ldd         #MSG2
-            ldx         #0
-        ; Print CONT value
-            jsr         [PrintF,X]
-            leas        2,SP
-            ldy         #ENTERO
+                ldab        CONT
+                ldaa        #0
+                pshd
+                ldd         #MSG2
+                ldx         #0
+            ; Print CONT value
+                jsr         [PrintF,X]
+                leas        2,SP
+                ldy         #ENTERO
 LOOP`:      
-            ldx         #0
-            ldab        1,Y+
-        ; Avoid PrintF to modify Y
-            pshy
-            pshb
-        ; Make b the right size
-            ldab        #0
-            pshb
-            ldaa        CONT
-            cmpa        #$1
-            bne         NEXT
-        ; Prints Final number
-            ldd         #MSG6
-            jmp         PRINT_E
+                ldx         #0
+                ldab        1,Y+
+            ; Avoid PrintF to modify Y
+                pshy
+                pshb
+            ; Make b the right size
+                ldab        #0
+                pshb
+                ldaa        CONT
+                cmpa        #$1
+                bne         NEXT
+            ; Prints Final number
+                ldd         #MSG5
+                jmp         PRINT_E
 NEXT:
         ;Prints Number and a comma
-            ldd         #MSG5
+                ldd         #MSG4
 PRINT_E:
-            jsr         [PrintF,X]
-            leas        2,SP
-            puly
-            dec         CONT
-            ldaa        CONT
-            bne         LOOP`
-            rts
+                jsr         [PrintF,X]
+                leas        2,SP
+                puly
+                dec         CONT
+                ldaa        CONT
+                bne         LOOP`
+                rts
