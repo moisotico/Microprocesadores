@@ -1,0 +1,4 @@
+ldaa #$93
+ldaa #$75
+aba
+daa

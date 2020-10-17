@@ -15,20 +15,20 @@
 ;                             Estructuras de datos
 ;*******************************************************************************
 
-LEDS EQU        1000
+LEDS:   equ     1000
 
 ;*******************************************************************************
 ;                             Relocalizar vectores
 ;*******************************************************************************
 
- org            $3E4C ;de tabla de vectores de interrupt
-                 dw PTH_ISR
+        org     $3E4C ;de tabla de vectores de interrupt
+        dw      PTH_ISR
 
 ;*******************************************************************************
 ;                             Config de hardware
 ;*******************************************************************************
 
-                ORG     $2000
+        org     $2000
 
         BSET DDRb,$FF   ;ESTO ES UNA MASCARA
         BSET DDRj,$02   ;bit 1 es segundo de der a izq

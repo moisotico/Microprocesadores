@@ -27,7 +27,7 @@ CONT_B:     ds      1
 ENTERO:     ds      12
 
             org         $1020
-DATOS:      db      4,9,18,4,27,63,12,32,36,15,49,4
+DATOS:      db      4,9,18,4,27,63,12,32,36,15,49,64
 
 ; Perfect squares from 1 to 255
             org         $1030
