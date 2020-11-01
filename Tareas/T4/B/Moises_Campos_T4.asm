@@ -267,7 +267,8 @@ PHO_ISR:
             ldx         #Num_Array
             brclr       Banderas,$04,RETURN_PHO
             bclr        Banderas,$04
-            ldaa        MAX_TCL 
+            ldaa        MAX_TCL
+            clr         Cont_TCL 
 LOOP_P:
             ldab        1,X+
             cmpb        #$FF

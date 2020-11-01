@@ -1,5 +1,5 @@
 ; Moises Campos Zepeda
-; 15-06-2020
+; 02-10-2020
 ; IE0623: Microprocesadores
 ; Tarea 5: Pantallas
 #include registers.inc
@@ -39,20 +39,20 @@ BIN2:           ds  1
 BCD_L:          ds  1
 LOW:            ds  1
 TEMP:           ds  1
-BCD1:            ds  1
-BCD2:            ds  1
-DISP1:           ds  1
-DISP2:           ds  1
-DISP3:           ds  1
-DISP4:           ds  1
-CONT_7SEG:       ds  2
-Cont_Delay:      ds  1
-D2mS:            db  100
-D240uS:          db  13
-D60uS:           db  3
-Clear_LCD:       db  $01
-ADD_L1:          db  $80
-ADD_L2:          db  $C0
+BCD1:           ds  1
+BCD2:           ds  1
+DISP1:          ds  1
+DISP2:          ds  1
+DISP3:          ds  1
+DISP4:          ds  1
+CONT_7SEG:      ds  2
+Cont_Delay:     ds  1
+D2mS:           db  100
+D260uS:         db  13
+D40uS:          db  2
+Clear_LCD:      db  $01
+ADD_L1:         db  $80
+ADD_L2:         db  $C0
 SendData:       ds  1
 BIN_NUM:        ds  1
 
@@ -62,7 +62,7 @@ BIN_NUM:        ds  1
 Teclas:         db  $01,$02,$03,$04,$05,$06,$07,$08,$09,$0B,$00,$0E
 
             org     $1040
-SEGMENT:       db  $3F,$06,$5B,$4F,$66,$6D,$7D,$07,$7F,$6F
+SEGMENT:        db  $3F,$06,$5B,$4F,$66,$6D,$7D,$07,$7F,$6F
 
             org     $1050
 ;   Number of bytes, 2*function set, Entry mode set, display on            
@@ -73,23 +73,23 @@ iniDisp:        db  $28,$28,$06,$0C
 
             ; DELETE OR COMMENT
 
-MSGA:          fcc "Key Received!"
-               fcb CR,LF,CR,LF,FIN
+MSGA:       fcc "Key Received!"
+            fcb CR,LF,CR,LF,FIN
 
-MSG0:          fcc "There's a mistake on PTH!"
-               fcb CR,LF,CR,LF,FIN
+MSG0:       fcc "Tecla: %X"
+            fcb CR,LF,CR,LF,FIN
 
-MSG1:          fcc "MODO CONFIG"
-               fcb CR,LF,CR,LF,FIN 
+MSG1:       fcc "MODO CONFIG"
+            fcb CR,LF,CR,LF,FIN 
 
-MSG2:          fcc "INGRSE CantPQ"
-                db CR,LF,CR,LF,FIN
+MSG2:       fcc "INGRSE CantPQ"
+            db CR,LF,CR,LF,FIN
  
-MSG3:          fcc "MODO RUN"
-                db CR,LF,CR,LF,FIN               
+MSG3:       fcc "MODO RUN"
+            db CR,LF,CR,LF,FIN               
 
-MSG4:          fcc "AcmPQ CUENTA"
-                db CR,LF,CR,LF,FIN               
+MSG4:       fcc "AcmPQ CUENTA"
+            db CR,LF,CR,LF,FIN               
 
 
 ; *****************************************************************************
@@ -100,14 +100,14 @@ MSG4:          fcc "AcmPQ CUENTA"
             dw      RTI_ISR
             org             $3E4C
             dw      PTH_ISR
-             org            $3E66
+            org            $3E66
             dw      OC4_ISR
 
 
 ; *****************************************************************************
 ;                               HW Config
 ; *****************************************************************************
-            org             $2000
+            org            $2000
         ; PORTS
             bset        DDRJ,$02
             bset        PTJ,$02
@@ -178,8 +178,8 @@ chknodoM1:
             movb        #0,AcmPQ
             movb        #0,CUENTA
             bclr        PORTE,$04
-            ldx         #MESS1
-            ldy         #MESS2
+            ldx         #MSG1
+            ldy         #MSG2
             jsr         CARGAR_LCD
             
 
@@ -188,21 +188,17 @@ jmodoconfig`
             bra         returnmain
 chknodoM0:
             brclr       BANDERAS,$10,jmodorun`
-                bclr    BANDERAS,$10
-                movb #$01,LEDS
-                ldx #MESS3
-                ldy #MESS4
-                jsr CARGAR_LCD
+            bclr        BANDERAS,$10
+            movb        #$01,LEDS
+            ldx         #MSG3
+            ldy         #MSG4
+            jsr         CARGAR_LCD
 jmodorun`
-            jsr MODO_RUN
+            jsr         MODO_RUN
               
 returnmain:     
-                jmp mainL
+            jmp         mainL
 
-
-
-                
-                
 ;       Subrutinas Generales
 ; *****************************************************************************
 
@@ -223,25 +219,21 @@ TAREA_TECLADO:
         ; TCL_LISTA = 1
             bset        Banderas,$01
             jmp         RETURN_TT
-
 TCL_NOT_READY:
             movb        #$FF, TECLA
             movb        #$FF, TECLA_IN
             bclr        Banderas, $03
             jmp         RETURN_TT
-
 REBOTES:
             movb        TECLA, TECLA_IN
         ; TCL_LEIDA = 1
             bset        Banderas,$02
             movb        #$0A, Cont_Reb
             jmp         RETURN_TT
-
 CHECK_ARRAY:
             brclr       Banderas,$01,RETURN_TT
             bclr        Banderas, $03
             jsr         FORMAR_ARRAY
-
 RETURN_TT:      
             rts            
          
@@ -252,7 +244,6 @@ MUX_TECLADO:
             clrb
             ldx         #Teclas
             movb        #$EF,Patron
-
 READ_LOOP:
             movb        Patron, PORTA
             nop
@@ -284,12 +275,10 @@ READ_LOOP:
         ; If no key was pressed
             movb        #$FF,Tecla
             rts
-
         ; If a key was pressed
 WR_TECLA:
             movb        B,X,Tecla
             rts
-
 
 ; *****************************************************************************
 ;                        FORMAR_ARRAY Subroutine
@@ -353,7 +342,7 @@ CARGAR_LCD:
             loc
             pshx        
         ;  TODO: PRINT     
-            ldx         #iniDsp
+            ldx         #iniDisp
             ldab        #4
 loop1`:
             ldaa        1,X+
@@ -485,44 +474,51 @@ return`:
 
 
 
-;       BIN_BCD
-                loc
-CONV_BIN_BCD:   ldab #14
-                movb #0,BCD_L
-                ldaa BIN1   ;inicio con bcd1
-                ldx #BCD_L    
-                bra loop`
-changeBCD`      lsla
-                rol 0,X
-                ldaa BIN2   ;continua con bcd2
-                movb BCD_L,BCD1
-                movb #0,BCD_L    
-loop`           lsla
-                rol 0,X
-                staa TEMP
-                ldaa 0,X
-                anda #$0F
-                cmpa #5
-                blt continue1`
-                adda #3
-continue1`      staa LOW 
-                ldaa 0,X
-                anda #$F0
-                cmpa #$50
-                blt continue2`
-                adda #$30
-continue2`      adda LOW
-                staa 0,X
-                ldaa TEMP
-                decb
-                cmpb #7
-                beq changeBCD`
-                cmpb #$0 
-                bne loop`
-                lsla
-                rol 0,X
-                movb BCD_L,BCD2                             
-                rts
+; *****************************************************************************
+;                        CONV_BIN_BCD Subrutine
+; *****************************************************************************
+            loc
+CONV_BIN_BCD:
+            ldab    #14
+            movb    #0,BCD_L
+            ldaa    BIN1   ;inicio con bcd1
+            ldx     #BCD_L    
+            bra     loop`
+changeBCD`
+            lsla
+            rol     0,X
+            ldaa    BIN2   ;continua con bcd2
+            movb    BCD_L,BCD1
+            movb    #0,BCD_L    
+loop`
+            lsla
+            rol     0,X
+            staa    TEMP
+            ldaa    0,X
+            anda    #$0F
+            cmpa    #5
+            blt     continue1`
+            adda    #3
+continue1`
+            staa    LOW 
+            ldaa    0,X
+            anda    #$F0
+            cmpa    #$50
+            blt     continue2`
+            adda    #$30
+continue2`
+            adda    LOW
+            staa    0,X
+            ldaa    TEMP
+            decb
+            cmpb    #7
+            beq     changeBCD`
+            cmpb    #$0 
+            bne     loop`
+            lsla
+            rol     0,X
+            movb    BCD_L,BCD2                             
+            rts
 
 ; *****************************************************************************
 ;                            BCD_BIN Subrutine
@@ -562,7 +558,6 @@ wrong`
             movb        #$0,CantPQ
 return`
             rts
-
 
 ; *****************************************************************************
 ;                        MODO_CONFIG Subroutine
@@ -617,24 +612,21 @@ return`:
             movb         AcmPQ,BIN2
             rts
 
-
-
-
-
 ; ************************************ISR*************************************
 
 ; *****************************************************************************
 ;                           PHO_ISR Subroutine
 ; *****************************************************************************
 PTH_ISR:
+; si no sirve usar brclr lol
             brset       PIFH,$01,PH0
             brset       PIFH,$02,PH1
             brset       PIFH,$04,PH2
             brset       PIFH,$08,PH3
 PH0:
             bset        PIFH,$01
-            tst               Cont_Reb
-            bne                RETURN_PTH
+            tst         Cont_Reb
+            bne         RETURN_PTH
             clr         CUENTA
             movb        #50,Cont_Reb
             ;stop relay
@@ -642,8 +634,8 @@ PH0:
             bra         RETURN_PTH
 PH1:
             bset        PIFH,$02
-            tst               Cont_Reb
-            bne                RETURN_PTH
+            tst         Cont_Reb
+            bne         RETURN_PTH
             clr         AcmPQ
             movb        #50,Cont_Reb
             ;stop relay
@@ -665,7 +657,6 @@ PH3:
             staa        BRILLO
 RETURN_PTH:
             rti
-
 
 ; *****************************************************************************
 ;                           RTI_ISR Subroutine
