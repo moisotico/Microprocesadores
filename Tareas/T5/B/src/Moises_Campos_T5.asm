@@ -80,16 +80,16 @@ MSG0:       fcc "Tecla: %X"
             fcb CR,LF,CR,LF,FIN
 
 MSG1:       fcc "MODO CONFIG"
-            fcb CR,LF,CR,LF,FIN 
+            fcb FIN
 
-MSG2:       fcc "INGRSE CantPQ"
-            db CR,LF,CR,LF,FIN
- 
+MSG2:       fcc "INGRESE CantPQ"
+            fcb FIN
+            
 MSG3:       fcc "MODO RUN"
-            db CR,LF,CR,LF,FIN               
+            fcb FIN
 
 MSG4:       fcc "AcmPQ CUENTA"
-            db CR,LF,CR,LF,FIN               
+            fcb FIN
 
 
 ; *****************************************************************************
@@ -145,8 +145,27 @@ MSG4:       fcc "AcmPQ CUENTA"
 ; *****************************************************************************
 ;                               Main Program
 ; *****************************************************************************
-mainL:
             loc
+            lds         #$3BFF
+
+            movb        #$FF, TECLA
+            movb        #$FF, TECLA_IN
+            ldaa        MAX_TCL
+            ldx         #Num_Array-1
+ARRAY_RST:
+            movb        #$FF,A,X
+            dbne        A,ARRAY_RST
+            
+            clr         Cont_Reb
+            clr         Cont_TCL
+            clr         Patron
+            clr         Banderas
+            clr         BIN1
+            clr         BIN2
+            clr         BCD1
+            clr         BCD2
+            clr         BRILLO
+mainL:
             tst         CantPQ
             beq         chknodoM1
             ldaa        PTIH
@@ -181,8 +200,6 @@ chknodoM1:
             ldx         #MSG1
             ldy         #MSG2
             jsr         CARGAR_LCD
-            
-
 jmodoconfig`
             jsr         MODO_CONFIG
             bra         returnmain
@@ -618,18 +635,21 @@ return`:
 ;                           PHO_ISR Subroutine
 ; *****************************************************************************
 PTH_ISR:
-; si no sirve usar brclr lol
+        ; Skip on MODO_CONFIG
+            brset       Banderas,$08,CONF_ONLY
             brset       PIFH,$01,PH0
             brset       PIFH,$02,PH1
+CONF_ONLY:        
             brset       PIFH,$04,PH2
             brset       PIFH,$08,PH3
+            bra         RETURN_PTH
 PH0:
             bset        PIFH,$01
             tst         Cont_Reb
             bne         RETURN_PTH
             clr         CUENTA
             movb        #50,Cont_Reb
-            ;stop relay
+        ;stop relay
             bclr        PORTE,$04
             bra         RETURN_PTH
 PH1:
@@ -638,13 +658,13 @@ PH1:
             bne         RETURN_PTH
             clr         AcmPQ
             movb        #50,Cont_Reb
-            ;stop relay
+        ;stop relay
             bclr        PORTE,$04
             bra         RETURN_PTH
 PH2:
             bset        PIFH,$04
             ldaa        BRILLO
-            bls         RETURN_PTH
+            beq         RETURN_PTH
             suba        #5
             staa        BRILLO
             bra         RETURN_PTH
