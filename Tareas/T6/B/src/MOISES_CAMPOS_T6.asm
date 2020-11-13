@@ -14,6 +14,7 @@ CR:             equ $0D
 LF:             equ $0A
 EOM:            equ $FF
 SUB:            equ $1A
+BS:             equ $08
 
             org             $1000
 Pointer0:        ds  2 
@@ -42,20 +43,20 @@ MSG:        fcb SUB
             fcb CR,LF
             fcc "              Volumen Calculado: "
 V_ASCII:
-            fcb 82,71,82,CR,LF
-            fcc " "
-            fcb CR,LF
-            fcc " "
-            fcb CR,LF
+            fcb 45,45,45,CR
             fcb EOM
 
-A_MSG:      fcc " Alarma: El Nivel esta Bajo "
+A_MSG:      fcb CR,LF
+	    fcc "              Alarma: El Nivel esta Bajo! "
             fcb CR,LF
             db  EOM
 
-V_MSG:      fcc " Tanque vaciando, Bomba Apagada"
+V_MSG:      fcb CR,LF
+            fcc "              Tanque vaciando, Bomba Apagada!"
             fcb CR,LF
             db  EOM
+
+ERASE:      db BS,BS,BS,EOM            
 
 ; *****************************************************************************
 ;                       Interruption Vector Relocation
@@ -104,12 +105,12 @@ NEXT_ATD:
             bclr        PTJ,$01
             lds         #$4000
             cli
-            ldx         #MSG
-            stx         Pointer0
+            movw        #MSG,Pointer0
             ldaa        SC1SR1
             wai
 CHK_CALC:
             jsr         CALCULO
+            nop
             bra         CHK_CALC
 
 
@@ -146,7 +147,6 @@ CALCULO:    loc
             stab        V_ASCII+1
             rts
 
-
 ; ************************************ISR*************************************
 
 ; *****************************************************************************
@@ -154,11 +154,11 @@ CALCULO:    loc
 ; *****************************************************************************
 RTI_ISR:    loc
             bset        CRGFLG,$80
+            brclr       BANDERAS,$04,NEXT`
+NEXT`
             tst         CONT_RTI
             bne         return`
             movb        #100,CONT_RTI
-            movw        A_MSG,Pointer1
-            movw        V_MSG,Pointer2
 return`
             dec         CONT_RTI
             rti        
@@ -188,20 +188,16 @@ SCI_ISR:    loc
             ldx         Pointer0
             ldaa        1,X+
             cmpa        #EOM
-            beq         CHK_FLAG0`
+            beq         ALRM_CHK`
             staa        SC1DRL
             stx         Pointer0
-            bra         return` 
-CHK_FLAG0`
-            bset        $04,BANDERAS
-            ldx         #V_ASCII
-            stx         Pointer0
-        ;    ldaa        SC1SR1       
+            bra         return`   
 ALRM_CHK`
             ldaa        VOLUMEN
+            brset       BANDERAS,$04,clear`
             brset       BANDERAS,$01,CHK_30pc`
             cmpa        #16
-            bhi         return`
+            bhi         CHK_90pc`
         ; Alarma activated
             bset        BANDERAS,$01
             movb        #1,PORTB
@@ -213,31 +209,25 @@ CHK_30pc`
             bclr        BANDERAS,$01
             bra         CHK_90pc`
 GO2PTR1`
-            ldx         Pointer1
-            ldaa        0,X
-            cmpa        #EOM
-            bne         INC_PTR1`
+            movw        #A_MSG,Pointer0
+            bset        Banderas,$04
             bra         return`
 GO2PTR2`
-            ldx         Pointer2
-            ldaa        0,X
-            cmpa        #EOM
-            beq         return`
+            movw        #V_MSG,Pointer0
             bset        BANDERAS,$02
-            movb        #0,PORTB
-            movb        1,X+,SC1DRL
-            stx         Pointer2
+            bset        Banderas,$04
+            bclr        PORTB,$01
             bra         return`
 CHK_90pc`
             cmpa       #95
-            beq        GO2PTR2`
+            bhi        GO2PTR2`
             bclr       BANDERAS,$02
-END_SC1`                
-            movb        #$08,SC1CR2
+            bset       Banderas,$04
+;END_SC1`                
+;            movb        #$08,SC1CR2
 return`
             rti
-
-INC_PTR1`
-            movb        1,X+,SC1DRL
-            stx         Pointer1
-            bra         return`
+clear`
+            movw       #MSG,Pointer0
+            bclr       Banderas,$04
+            bra        return`
