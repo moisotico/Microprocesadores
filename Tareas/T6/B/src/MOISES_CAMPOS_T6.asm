@@ -17,10 +17,7 @@ SUB:            equ $1A
 BS:             equ $08
 
             org             $1000
-Pointer0:        ds  2 
-Pointer1:        ds  2 
-Pointer2:        ds  2 
-
+Pointer0:       ds  2 
             org             $1010
 Nivel_PROM:     ds  2
 NIVEL:          ds  1
@@ -47,7 +44,7 @@ V_ASCII:
             fcb EOM
 
 A_MSG:      fcb CR,LF
-	    fcc "              Alarma: El Nivel esta Bajo! "
+            fcc "              Alarma: El Nivel esta Bajo! "
             fcb CR,LF
             db  EOM
 
@@ -154,10 +151,12 @@ CALCULO:    loc
 ; *****************************************************************************
 RTI_ISR:    loc
             bset        CRGFLG,$80
-            brclr       BANDERAS,$04,NEXT`
-NEXT`
             tst         CONT_RTI
             bne         return`
+            brclr       BANDERAS,$08,NEXT`
+            bclr        BANDERAS,$08
+            movb        #$88,SC1CR2
+NEXT`
             movb        #100,CONT_RTI
 return`
             dec         CONT_RTI
@@ -223,11 +222,11 @@ CHK_90pc`
             bhi        GO2PTR2`
             bclr       BANDERAS,$02
             bset       Banderas,$04
-;END_SC1`                
-;            movb        #$08,SC1CR2
 return`
             rti
 clear`
             movw       #MSG,Pointer0
             bclr       Banderas,$04
+            bset       Banderas,$08
+            movb       #$08,SC1CR2
             bra        return`
