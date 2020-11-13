@@ -17,13 +17,19 @@ EOM:            equ $FF
             org             $1000
 Puntero:    ds  2 
 
-MSG:        fcc "	   UNIVERSIDAD DE COSTA RICA"
+MSG:        fcc "                           UNIVERSIDAD DE COSTA RICA"
             fcb CR,LF
-            fcc "	Escuela de Ingenieria Electrica"
+            fcc "                        Escuela de Ingenieria Electrica"
             fcb CR,LF
-            fcc "		Microprocesadores"
+            fcc "                              Microprocesadores"
             fcb CR,LF
-            fcc "		    IE0623"
+            fcc "                                   IE0623"
+V_ASCII:
+            fcb 82,71,82,CR,LF
+            fcc " "
+            fcb CR,LF
+            fcc " "
+            fcb CR,LF
             db  EOM
 
 

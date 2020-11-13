@@ -128,7 +128,7 @@ MSG4:       fcc "AcmPQ CUENTA"
 
         ; Ctrl registers and timer enable
             bset        TSCR1,$90 
-            bset        TSCR2,$03
+            bset        TSCR2,$06
             bset        TIOS,$10
             bset        TIE,$10
             bset        TCTL1,$01
