@@ -24,7 +24,7 @@ NIVEL:          ds  1
 ; Vaue to send to terminal
 VOLUMEN:        ds  1
 CONT_RTI:       ds  1
-;2: Msg completado, 1: Vaciado activated, 0: Alarma activated 
+;3: Msg completado, 1: Vaciado activated, 0: Alarma activated 
 BANDERAS:       ds  1
 
 
@@ -90,7 +90,7 @@ NEXT_ATD:
             movb        #$10,ATD0CTL4
             movb        #$80,ATD0CTL5
         ;SCI 1
-            movb        #$27,SC1BDH
+            movb        #$27,SC1BDL
             movb        #0,SC1CR1
             movb        #$88,SC1CR2
         ;RTI
@@ -126,6 +126,11 @@ CALCULO:    loc
         ; Calculate Volumen with 7 = pi*(1.5)^2
             ldaa        #7
             mul
+            cmpb        VOLUMEN
+            beq         skip`
+        ; Reload Flag   
+            bset        Banderas,$10
+skip`            
             stab        VOLUMEN
         ; Convert to ASCII, dividing units, tens, and hundreds
             ldx         #100
@@ -153,15 +158,16 @@ RTI_ISR:    loc
             bset        CRGFLG,$80
             tst         CONT_RTI
             bne         return`
-            brclr       BANDERAS,$08,NEXT`
-            bclr        BANDERAS,$08
-            movb        #$88,SC1CR2
+            brset       BANDERAS,$18,SetSC1`
 NEXT`
             movb        #100,CONT_RTI
 return`
             dec         CONT_RTI
             rti        
-
+SetSC1`
+            bclr        BANDERAS,$18
+            movb        #$88,SC1CR2
+            bra         NEXT`
 
 ; *****************************************************************************
 ;                           ATD0_ISR
