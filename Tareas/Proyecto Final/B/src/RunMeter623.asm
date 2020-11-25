@@ -177,6 +177,7 @@ R_MSG2:         fcc "VUELTAS    VELOC"
             bset        CRGINT,$80
         ; Ctrl registers y timer enable
             movb        #$80,TSCR1 
+        ;PRS = 8    
             movb        #$03,TSCR2
             movb        #$10,TIOS
             movb        #$10,TIE

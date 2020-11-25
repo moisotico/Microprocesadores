@@ -128,7 +128,8 @@ MSG4:       fcc "AcmPQ CUENTA"
 
         ; Ctrl registers and timer enable
             bset        TSCR1,$90 
-            bset        TSCR2,$06
+        ;PRS = 8
+            bset        TSCR2,$03
             bset        TIOS,$10
             bset        TIE,$10
             bset        TCTL1,$01
@@ -155,16 +156,19 @@ MSG4:       fcc "AcmPQ CUENTA"
 ARRAY_RST:
             movb        #$FF,A,X
             dbne        A,ARRAY_RST
-            
+            clr         CantPQ
+            clr         AcmPQ
             clr         Cont_Reb
+            clr         CONT_TICKS
             clr         Cont_TCL
             clr         Patron
-            clr         Banderas
+            movb        #$18,BANDERAS
             clr         BIN1
             clr         BIN2
             clr         BCD1
             clr         BCD2
-            clr         BRILLO
+            clr         CONT_DIG
+            movb        #50,BRILLO
 mainL:
             tst         CantPQ
             beq         chknodoM1
@@ -193,7 +197,7 @@ chknodoM1:
             bclr        BANDERAS,$10
             movb        #$02,LEDS
             movb        CantPQ,BIN1
-            movb        #0,BIN2
+            movb        #100,BIN2
             movb        #0,AcmPQ
             movb        #0,CUENTA
             bclr        PORTE,$04
@@ -489,8 +493,6 @@ return`:
             rts
 
 
-
-
 ; *****************************************************************************
 ;                        CONV_BIN_BCD Subrutine
 ; *****************************************************************************
@@ -571,8 +573,11 @@ sumA`
             stab        CantPQ
             bra         return`
 wrong`
-            movb        #$FF,NUM_ARRAY
-            movb        #$0,CantPQ
+            ldaa        MAX_TCL
+loop1`
+            movb        #$FF,A,X
+            dbne        A,loop1`
+            clr         CantPQ
 return`
             rts
 
@@ -702,6 +707,7 @@ OC4_ISR:
             ldaa        CONT_TICKS
             ldab        #100
             subb        BRILLO
+        ; Obtenemos el valor de DT = 100 - BRILLO
             cba
             beq         apagar`
             tst         CONT_TICKS
@@ -714,14 +720,15 @@ incticks`
             jmp         part2`
 ;Apagar
 apagar`
-            movb        #$FF,PTP
-            movb        #$0, PORTB
+            movb        #$0F,PTP
+            bclr        PTJ,$02 ; enciendo
+            clr         PORTB
             bra         checkN`
 changeDigit`
             movb        #$0,CONT_TICKS
             ldaa        #5
             cmpa        CONT_DIG
-            bne         jpart2`
+            bhi         jpart2`
             clr         CONT_DIG
 jpart2`
             inc         CONT_DIG
@@ -769,6 +776,7 @@ ndig4`
 digleds`
             movb        LEDS, PORTB
             bclr        PTJ, $02
+           ; movb        #$0F,PTP
             inc         CONT_TICKS
 
 part2`
