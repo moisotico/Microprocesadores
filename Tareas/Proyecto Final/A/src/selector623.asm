@@ -410,9 +410,9 @@ rng_error`
             beq         next`
             bset        BANDERA_2,$01      
             clr         TICK_EN
-            movw        #87,TICK_DIS
-            movw        #$AA,BIN1
-            movw        #$AA,BIN2
+            movb        #87,TICK_DIS
+            movb        #$AA,BIN1
+            movb        #$AA,BIN2
             ldx         A_MSG1 
             ldy         A_MSG2
             jsr         CARGAR_LCD

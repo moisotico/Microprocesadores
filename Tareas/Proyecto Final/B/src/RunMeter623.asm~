@@ -99,7 +99,7 @@ initDisp:       db  $28,$28,$06,$0C
 ; Mensaje Modo Libre
 L_MSG1:         fcc " RunMeter  623 "
                 fcb FIN
-L_MSG2:         fcc "  MODO  LIBRE  "
+L_MSG2:      fcc "  MODO LIBRE  "
                 fcb FIN
 ; Mensaje Modo Configuracion
 CONF_MSG1:      fcc "  MODO CONFIG  "
@@ -156,8 +156,8 @@ R_MSG2:         fcc "VUELTAS    VELOC"
                 dw OC4_ISR
 
                 ;org $FFDE
-                ;org $3E5E
-                ;dw TCNT_ISR
+                org $3E5E
+                dw TCNT_ISR
 
 ; *****************************************************************************
 ;                               HW Config
@@ -208,7 +208,7 @@ loopIATD:
         ;8 bits, 4 ciclos de atd, PRS 19
             movb        #$B2,ATD0CTL4
         ; no multiplex, sin signo, pad7
-        ;    movb        #$87,ATD0CTL5
+            movb        #$87,ATD0CTL5
 
 ; *****************************************************************************
 ; *                               Main                                        *
@@ -231,7 +231,7 @@ ARRAY_RST`
             clr         Cont_Reb
             clr         Cont_TCL
             clr         Patron
-            movb        #$50,Banderas
+            clr         Banderas
             clr         BIN1
             clr         BIN2
             clr         BCD1
@@ -239,19 +239,17 @@ ARRAY_RST`
             clr         CONT_DIG
             clr         BRILLO
             clr         NumVueltas
-            clr         ValorVueltas
 INIT_LOOP`
             jsr         MODO_CONFIGURACION
             tst         NumVueltas
             beq         INIT_LOOP`
 MAIN_LOOP`
             ldaa        PTIH
-            anda        #$C0
+            anda        $C0
             ldab        BANDERAS
-            andb        #$C0
+            andb        $C0
             cba
             beq         NO_CHNG`
-            bclr        BANDERAS,$C0
             oraa        BANDERAS
             staa        BANDERAS
             bset        BANDERAS,$10
@@ -274,6 +272,15 @@ CHK_CONFIG`
             jsr         MODO_LIBRE
             bra         RETURN`
 GO2_CONFIG`
+            brclr       BANDERAS,$10,jmodoconfig`
+            movb        #$02,LEDS
+            movb        NumVueltas,BIN1
+            movb        #100,BIN2
+            movb        #0,ValorVueltas
+            ldx         #CONF_MSG1
+            ldy         #CONF_MSG2
+            jsr         CARGAR_LCD
+jmodoconfig`
             jsr         MODO_CONFIGURACION
             bra         RETURN`
 ; TODO
@@ -293,29 +300,17 @@ RETURN`:
 ; *****************************************************************************
 MODO_CONFIGURACION:
             loc
-            brclr       BANDERAS,$10,jmodoconfig`
-            bclr        BANDERAS,$10
-            movb        #$02,LEDS
-            movb        NumVueltas,BIN1
-            movb        #100,BIN2
-            movb        #0,ValorVueltas
-            ldx         #CONF_MSG1
-            ldy         #CONF_MSG2
-            jsr         CARGAR_LCD
-jmodoconfig`
-            loc
             bclr        PIEH,$0F
             brclr       BANDERAS,$04,GO2TAREATECLADO
             jsr         BCD_BIN
             bclr        BANDERAS,$04
-            ldaa        ValorVueltas
+            ldaa        NumVueltas
             cmpa        #25
             bgt         resetNumVuelt`
             cmpa        #5
             blt         resetNumVuelt`
-            movb        ValorVueltas,NumVueltas
             movb        NumVueltas,BIN1
-            ;movb        #0,BIN2
+            movb        #0,BIN2
             bra         return`
 GO2TAREATECLADO:
             jsr         TAREA_TECLADO
@@ -324,7 +319,7 @@ resetNumVuelt`:
             clr         NumVueltas
 return`:
             rts
-            
+
             
 ; *****************************************************************************
 ;                        MODO_COMPETENCIA Subroutine
@@ -343,8 +338,14 @@ MODO_RESUMEN:
 ;                           MODO_LIBRE Subroutine
 ; *****************************************************************************
 MODO_LIBRE:
+; *****************************************************************************
+;                        MODO_STOP Subroutine
+; *****************************************************************************
+MODO_STOP:
             loc
-            brclr       BANDERAS,$10,return`
+            ldaa        BANDERAS
+            anda        #$10
+            beq         return`
             ldx         #L_MSG1
             ldy         #L_MSG2
             bclr        BANDERAS,$10
@@ -631,21 +632,12 @@ CONV_BIN_BCD:
             ldab    #14
             movb    #0,BCD_L
             ldaa    BIN1   ;inicio con bcd1
-            cmpa    #$BB
-            beq     chk_special1`
-            cmpa    #$AA
-            beq     chk_special1`
             ldx     #BCD_L    
             bra     loop`
 changeBCD`
             lsla
             rol     0,X
-chk_BCD`
             ldaa    BIN2   ;continua con bcd2
-            cmpa    #$BB
-            beq     chk_special2`
-            cmpa    #$AA
-            beq     chk_special2`
             movb    BCD_L,BCD1
             movb    #0,BCD_L    
 loop`
@@ -675,18 +667,8 @@ continue2`
             bne     loop`
             lsla
             rol     0,X
-            movb    BCD_L,BCD2
-return`                                         
+            movb    BCD_L,BCD2                             
             rts
-
-chk_special1`
-            staa    BCD1
-            bra     chk_BCD`
-chk_special2`
-            staa    BCD2
-            bra     return`
-
-
 
 ; *****************************************************************************
 ;                            BCD_BIN Subrutine
@@ -789,10 +771,11 @@ RTI_ISR:
             dec         Cont_Reb
 CHK_TCOUNT`
             tst        CONT_200
-            beq        RETURN`
+            beq        INCR200`
             dec        CONT_200 
-;INCR200`
-            movb        #$87,ATD0CTL5
+INCR200`
+            movb        #$93,ATD0CTL5
+            movb       #200,CONT_200
 RETURN`:
             rti
 
@@ -817,7 +800,6 @@ incticks`
 ;Apagar
 apagar`
             movb        #$FF,PTP
-            bclr        PTJ,$02 ; enciendo
             movb        #$0, PORTB
             bra         checkN`
 changeDigit`
@@ -897,31 +879,31 @@ JBCD_7SEG`
 ; *****************************************************************************
 ;                           TCNT_ISR Subroutine
 ; *****************************************************************************
-;TCNT_ISR:
-;           loc
-;           ldd         TCNT
-;          movb        #$FF,TFLG2
-;          ldaa        TICK_MED
-;          cmpa        #255
-;          beq         chk_en`
-;          brclr       BANDERAS,$10,chk_en`
-;          inc         TICK_MED
-;chk_en`
-;           tst         VELOC
-;           beq         return`
-;           ldx         TICK_EN
-;       ; When TICK_EN = $0000, on next run dex makes it $FFFF
-;           dex
-;           bne         No_Set`
-;           bset        BANDERAS,$08
-;No_Set`
-;           stx         TICK_EN
-;           ldx         TICK_DIS
-;       ; When TICK_DIS = $0000, on next run dex makes it $FFFF
-;           dex
-;           bne         No_Clr`
-;           bclr        BANDERAS,$08
-;No_Clr`
-;           stx         TICK_DIS
-;return`
-;            rti        
+TCNT_ISR:
+            loc
+            ldd         TCNT
+            movb        #$FF,TFLG2
+            ldaa        TICK_MED
+            cmpa        #255
+            beq         chk_en`
+            brclr       BANDERAS,$10,chk_en`
+            inc         TICK_MED
+chk_en`
+            tst         VELOC
+            beq         return`
+            ldx         TICK_EN
+        ; When TICK_EN = $0000, on next run dex makes it $FFFF
+            dex
+            bne         No_Set`
+            bset        BANDERAS,$08
+No_Set`
+            stx         TICK_EN
+            ldx         TICK_DIS
+        ; When TICK_DIS = $0000, on next run dex makes it $FFFF
+            dex
+            bne         No_Clr`
+            bclr        BANDERAS,$08
+No_Clr`
+            stx         TICK_DIS
+return`
+            rti        
