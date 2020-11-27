@@ -84,7 +84,8 @@ D60uS:          db  3
 Clear_LCD:      db  $01
 ADD_L1:         db  $80
 ADD_L2:         db  $C0
-SendData:       ds  1
+   ;-- BANDERAS_2:    3:, 2:, 1:En_tick_flg, 0:SendData_flg
+BANDERAS_2:     ds  1
 
 
             org         $1040
@@ -145,7 +146,7 @@ R_MSG2:         fcc "VUELTAS    VELOC"
                 
                 ;org  $FFCC
                 org $3E4C
-                dw PTH_ISR
+                dw CALCULAR_ISR
 
                 ;org $FFD2
                 org $3E52
@@ -156,8 +157,8 @@ R_MSG2:         fcc "VUELTAS    VELOC"
                 dw OC4_ISR
 
                 ;org $FFDE
-                ;org $3E5E
-                ;dw TCNT_ISR
+                org $3E5E
+                dw TCNT_ISR
 
 ; *****************************************************************************
 ;                               HW Config
@@ -286,8 +287,23 @@ GO2_RES`
 RETURN`:     
             jmp         MAIN_LOOP`
 
+; ************************************ MODOS **********************************
+
 ; *****************************************************************************
 ;                        MODO_CONFIGURACION Subroutine
+; *****************************************************************************
+;Descripcion:
+;  Modo de operación del sensor, en este modo se configura el numero de vueltas
+; del sensor. Para esto se debe verificar que el valor ingresado en el teclado
+; sea valido es decir entre el rango de 5 y 25 vueltas.
+; Si no es valido se borra, caso contrario se muestra en pantalla.
+;Paso de parametros:
+;Entrada:
+;      * ValorVueltas: Numero de vueltas a ingresar y validar.
+;Salida:
+;      * BIN1: Valor en binario a mostrar en los displays de 7 segmentos 1 y 2
+;      * BIN2: Valor en binario a mostrar en los displays de 7 segmentos 3 y 4,
+;       en este caso BB para que se apaguen
 ; *****************************************************************************
 MODO_CONFIGURACION:
             loc
@@ -371,6 +387,8 @@ return`
             movb        #$BB,BIN1 
             movb        #$BB,BIN2
             rts
+
+; *********************************** RUTINAS *********************************
 
 ; *****************************************************************************
 ;                        TAREA_TECLADO Subroutine
@@ -516,12 +534,12 @@ CARGAR_LCD:
             ldab        #4
 loop1`:
             ldaa        1,X+
-            clr         SendData
+            bclr        BANDERAS_2,$01
             jsr         SEND
             movb        D60uS,Cont_Delay
             jsr         Delay
             dbne        B,loop1`
-            clr         SendData
+            bclr        BANDERAS_2,$01
             ldaa        Clear_LCD
             jsr         SEND
             movb        D2mS,Cont_Delay
@@ -529,7 +547,7 @@ loop1`:
         ; LINE1    
             pulx
             ldaa        ADD_L1
-            clr         SendData
+            bclr        BANDERAS_2,$01
             jsr         SEND
             movb        D60uS,Cont_Delay
             jsr         Delay
@@ -537,14 +555,14 @@ loop2`:
             ldaa        1,X+
             cmpa        #FIN
             beq         LINE2`
-            movb        #1,SendData
+            bset        BANDERAS_2,$01
             jsr         SEND
             movb        D60uS,Cont_Delay
             jsr         Delay
             bra         loop2`
 LINE2`:
             ldaa        ADD_L2
-            clr         SendData
+            bclr        BANDERAS_2,$01
             jsr         SEND
             movb        D60uS,Cont_Delay
             jsr         Delay
@@ -552,7 +570,7 @@ loop3`:
             ldaa        1,Y+
             cmpa        #FIN
             beq         return`
-            movb        #1,SendData
+            bset        BANDERAS_2,$01
             jsr         SEND
             movb        D60uS,Cont_Delay
             jsr         Delay
@@ -570,8 +588,7 @@ SEND:       loc
             lsra
             lsra
             staa        PORTK
-            tst         SendData
-            beq         clearK1`
+            brclr       BANDERAS_2,$01,clearK1`
             bset        PORTK,$01
 merge1`:
             bset        PORTK,$02
@@ -584,8 +601,7 @@ merge1`:
             lsla
             lsla
             staa        PORTK
-            tst         SendData
-            beq         clearK2`
+            brclr       BANDERAS_2,$01,clearK2`
             bset        PORTK,$01
 merge2`:
             bset        PORTK,$02
@@ -747,7 +763,7 @@ return`
             rts
 
 ; *****************************************************************************
-;                        PANT_CTRL Subroutine
+;                        PANT_CTRL Subroutine: TODO
 ; *****************************************************************************
 PANT_CTRL:
             loc
@@ -761,12 +777,13 @@ PANT_CTRL:
 return`
             rts
 
-; ************************************ISR*************************************
+; *********************************** ISR *************************************
 
 ; *****************************************************************************
 ;                           ATD_ISR Subroutine
 ; *****************************************************************************
-;           Calcula BRILLO from POT
+;   Descripcion:
+;        Calcula BRILLO desde el POT
 ; *****************************************************************************
 ATD_ISR:
             ldx         #5
@@ -790,25 +807,28 @@ ATD_ISR:
             rti
 
 ; *****************************************************************************
-;                           PTH_ISR Subroutine
+;                           CALCULAR_ISR Subroutine
 ; *****************************************************************************
-PTH_ISR:
+CALCULAR_ISR:
+            loc
 ;            brset       BANDERAS,$08,CONF_ONLY
             brset       PIFH,$01,PH0
             brset       PIFH,$08,PH3
-;CONF_ONLY:        
-;            brset       PIFH,$04,PH2
-;            brset       PIFH,$08,PH3
-            bra         RETURN_PTH
+            bra         RETURN`
 PH0:
             bset        PIFH,$01
             tst         Cont_Reb
-            bne         RETURN_PTH
+            bne         RETURN`
             movb        #100,Cont_Reb
-            bra         RETURN_PTH
-;PH2:
+            bra         RETURN`
 PH3:
-RETURN_PTH:
+            bset        PIFH,$08
+            ldaa        Cont_Reb
+            bne         RETURN`
+            movb        #100,Cont_Reb
+            clr         TICK_MED
+            bset        BANDERAS_2,$02            
+RETURN`
             rti
 
 ; *****************************************************************************
@@ -930,31 +950,32 @@ JBCD_7SEG`
 ; *****************************************************************************
 ;                           TCNT_ISR Subroutine
 ; *****************************************************************************
-;TCNT_ISR:
-;           loc
-;           ldd         TCNT
-;          movb        #$FF,TFLG2
-;          ldaa        TICK_MED
-;          cmpa        #255
-;          beq         chk_en`
-;          brclr       BANDERAS,$10,chk_en`
-;          inc         TICK_MED
-;chk_en`
-;           tst         VELOC
-;           beq         return`
-;           ldx         TICK_EN
-;       ; When TICK_EN = $0000, on next run dex makes it $FFFF
-;           dex
-;           bne         No_Set`
-;           bset        BANDERAS,$08
-;No_Set`
-;           stx         TICK_EN
-;           ldx         TICK_DIS
-;       ; When TICK_DIS = $0000, on next run dex makes it $FFFF
-;           dex
-;           bne         No_Clr`
-;           bclr        BANDERAS,$08
-;No_Clr`
-;           stx         TICK_DIS
-;return`
-;            rti        
+TCNT_ISR:
+            loc
+            ldd         TCNT
+            movb        #$FF,TFLG2
+            ldaa        TICK_MED
+            cmpa        #255
+            beq         chk_en`
+        ; Check En_tick_flg   
+            brclr       BANDERAS_2,$10,chk_en`
+            inc         TICK_MED
+chk_en`
+            tst         VELOC
+            beq         return`
+            ldx         TICK_EN
+       ; When TICK_EN = $0000, on next run dex makes it $FFFF
+            dex
+            bne         No_Set`
+            bset        BANDERAS,$08
+No_Set`
+            stx         TICK_EN
+            ldx         TICK_DIS
+       ; When TICK_DIS = $0000, on next run dex makes it $FFFF
+            dex
+            bne         No_Clr`
+            bclr        BANDERAS,$08
+No_Clr`
+            stx         TICK_DIS
+return`
+            rti        
