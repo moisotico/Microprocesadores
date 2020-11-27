@@ -231,9 +231,9 @@ ARRAY_RST`
             clr         Cont_Reb
             clr         Cont_TCL
             clr         Patron
-            movb        #$50,Banderas
+            movb        #$50,BANDERAS
             clr         BIN1
-            clr         BIN2
+            movb        #$BB,BIN2
             clr         BCD1
             clr         BCD2
             clr         CONT_DIG
@@ -273,17 +273,15 @@ CHK_CONFIG`
             brset       BANDERAS,$40,GO2_CONFIG`
             jsr         MODO_LIBRE
             bra         RETURN`
-GO2_CONFIG`
+GO2_CONFIG` 
             jsr         MODO_CONFIGURACION
             bra         RETURN`
 ; TODO
 GO2_COMP`
-            brclr       BANDERAS,$10,*TODO*`
             jsr         MODO_COMPETENCIA
             bra         RETURN`
 ; TODO
 GO2_RES`
-            brclr       BANDERAS,$10,*TODO*`
             jsr         MODO_RESUMEN
 RETURN`:     
             jmp         MAIN_LOOP`
@@ -295,9 +293,11 @@ MODO_CONFIGURACION:
             loc
             brclr       BANDERAS,$10,jmodoconfig`
             bclr        BANDERAS,$10
+            clr         TICK_EN
+            clr         TICK_DIS
             movb        #$02,LEDS
             movb        NumVueltas,BIN1
-            movb        #100,BIN2
+            movb        #$BB,BIN2
             movb        #0,ValorVueltas
             ldx         #CONF_MSG1
             ldy         #CONF_MSG2
@@ -315,7 +315,6 @@ jmodoconfig`
             blt         resetNumVuelt`
             movb        ValorVueltas,NumVueltas
             movb        NumVueltas,BIN1
-            ;movb        #0,BIN2
             bra         return`
 GO2TAREATECLADO:
             jsr         TAREA_TECLADO
@@ -325,12 +324,29 @@ resetNumVuelt`:
 return`:
             rts
             
-            
 ; *****************************************************************************
 ;                        MODO_COMPETENCIA Subroutine
 ; *****************************************************************************
 MODO_COMPETENCIA:
             loc
+            brclr       BANDERAS,$10,chk_veloc`
+            bclr        BANDERAS,$10
+            movb        #$02,LEDS
+            movb        #$BB,BIN1      
+            movb        #$BB,BIN2
+            movb        #$09,PIEH
+        ;activate TOI
+            movb        #$83,TSCR2  
+        ;I MSG
+            ldx         #I_MSG1
+            ldy         #I_MSG2
+            jsr         CARGAR_LCD
+            
+chk_veloc`
+            tst         VELOC
+            beq         return`
+            jsr         PANT_CTRL
+return`
             rts
 
 ; *****************************************************************************
@@ -345,16 +361,16 @@ MODO_RESUMEN:
 MODO_LIBRE:
             loc
             brclr       BANDERAS,$10,return`
+            bclr        BANDERAS,$10
             ldx         #L_MSG1
             ldy         #L_MSG2
             bclr        BANDERAS,$10
             movb        #$04,LEDS
             jsr         CARGAR_LCD
-            movb        #$BB,BIN1      
-            movb        #$BB,BIN2
 return`
+            movb        #$BB,BIN1 
+            movb        #$BB,BIN2
             rts
-
 
 ; *****************************************************************************
 ;                        TAREA_TECLADO Subroutine
@@ -367,26 +383,26 @@ TAREA_TECLADO:
             ldaa        TECLA
             cmpa        #$FF
             beq         CHECK_ARRAY
-            brclr       Banderas,$02,REBOTES
+            brclr       BANDERAS,$02,REBOTES
             cmpa        TECLA_IN
             bne         TCL_NOT_READY
         ; TCL_LISTA = 1
-            bset        Banderas,$01
+            bset        BANDERAS,$01
             jmp         RETURN_TT
 TCL_NOT_READY:
             movb        #$FF, TECLA
             movb        #$FF, TECLA_IN
-            bclr        Banderas, $03
+            bclr        BANDERAS, $03
             jmp         RETURN_TT
 REBOTES:
             movb        TECLA, TECLA_IN
         ; TCL_LEIDA = 1
-            bset        Banderas,$02
+            bset        BANDERAS,$02
             movb        #$0A, Cont_Reb
             jmp         RETURN_TT
 CHECK_ARRAY:
-            brclr       Banderas,$01,RETURN_TT
-            bclr        Banderas, $03
+            brclr       BANDERAS,$01,RETURN_TT
+            bclr        BANDERAS, $03
             jsr         FORMAR_ARRAY
 RETURN_TT:      
             rts            
@@ -469,7 +485,7 @@ CHECK_E:
 
 COMPARE_E:
         ; ARRAY_OK = 1
-            bset        Banderas,$04
+            bset        BANDERAS,$04
             clr         Cont_TCL
             jmp         RETURN_FA
 
@@ -628,25 +644,26 @@ return`:
 ; *****************************************************************************
             loc
 CONV_BIN_BCD:
-            ldab    #14
             movb    #0,BCD_L
             ldaa    BIN1   ;inicio con bcd1
             cmpa    #$BB
             beq     chk_special1`
             cmpa    #$AA
             beq     chk_special1`
+        ; Algoritmo para numeros, que no sea " " o "-" en d. 7 seg
+            ldab    #14
             ldx     #BCD_L    
             bra     loop`
 changeBCD`
             lsla
             rol     0,X
 chk_BCD`
+            movb    BCD_L,BCD1
             ldaa    BIN2   ;continua con bcd2
             cmpa    #$BB
             beq     chk_special2`
             cmpa    #$AA
             beq     chk_special2`
-            movb    BCD_L,BCD1
             movb    #0,BCD_L    
 loop`
             lsla
@@ -671,22 +688,21 @@ continue2`
             decb
             cmpb    #7
             beq     changeBCD`
-            cmpb    #$0 
+            cmpb    #0 
             bne     loop`
             lsla
             rol     0,X
             movb    BCD_L,BCD2
 return`                                         
             rts
-
+        ; Casos donde se apaga o utiliza un guion
 chk_special1`
             staa    BCD1
-            bra     chk_BCD`
+            staa    BCD2
+            bra     return`
 chk_special2`
             staa    BCD2
             bra     return`
-
-
 
 ; *****************************************************************************
 ;                            BCD_BIN Subrutine
@@ -722,11 +738,28 @@ sumA`
             stab        ValorVueltas
             bra         return`
 wrong`
-            movb        #$FF,NUM_ARRAY
-            movb        #$0,ValorVueltas
+            ldaa        MAX_TCL
+loop1`
+            movb        #$FF,A,X
+            dbne        A,loop1`
+            clr        ValorVueltas
 return`
             rts
 
+; *****************************************************************************
+;                        PANT_CTRL Subroutine
+; *****************************************************************************
+PANT_CTRL:
+            loc
+            brset       BANDERAS,$08,return`
+            BSET        BANDERAS,$08
+            movb        #$AA,BIN1
+            movb        #$AA,BIN2
+            ldx         #COMP_MSG1 
+            ldy         #COMP_MSG2
+            jsr         CARGAR_LCD
+return`
+            rts
 
 ; ************************************ISR*************************************
 
@@ -760,7 +793,7 @@ ATD_ISR:
 ;                           PTH_ISR Subroutine
 ; *****************************************************************************
 PTH_ISR:
-;            brset       Banderas,$08,CONF_ONLY
+;            brset       BANDERAS,$08,CONF_ONLY
             brset       PIFH,$01,PH0
             brset       PIFH,$08,PH3
 ;CONF_ONLY:        
