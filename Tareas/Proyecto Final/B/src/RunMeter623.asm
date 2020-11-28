@@ -84,7 +84,8 @@ D60uS:          db  3
 Clear_LCD:      db  $01
 ADD_L1:         db  $80
 ADD_L2:         db  $C0
-   ;-- BANDERAS_2:   .7:X, .6:X , .5:X, .4:X, .3:X, 2:X, 1:Calc_flag, 0:SendData_flg
+   ;-- BANDERAS_2:  .7:X, .6:X , .5:X, .4:X,
+   ;                .3:X, 2: X, 1:Calc_flag, 0SendData_flg
 BANDERAS_2:     ds  1
 V_MIN:          db  35
 V_MAX:          db  95
@@ -275,7 +276,6 @@ CHK_CONFIG`
 GO2_CONFIG` 
             jsr         MODO_CONFIGURACION
             bra         RETURN`
-; TODO
 GO2_COMP`
             jsr         MODO_COMPETENCIA
             bra         RETURN`
@@ -345,11 +345,15 @@ MODO_COMPETENCIA:
             loc
             brclr       BANDERAS,$10,chk_veloc`
             bclr        BANDERAS,$10
-            movb        #$02,LEDS
+            movb        #$04,LEDS
             movb        #$BB,BIN1      
             movb        #$BB,BIN2
             movb        #$09,PIEH
+            ldx         #I_MSG1
+            ldy         #I_MSG2
+            jsr         CARGAR_LCD
             clr         VelProm
+            clr         Veloc
         ;activate TOI
             movb        #$83,TSCR2  
             
@@ -358,7 +362,7 @@ chk_veloc`
             beq         tst_flg`
             jsr         PANT_CTRL
 tst_flg`
-            brclr       BANDERAS_2,$02,chk_veloc`
+            brclr       BANDERAS_2,$02,return`
             bclr        PIEH,$08
             bclr        BANDERAS_2,$02
         ;I MSG
@@ -374,6 +378,9 @@ return`
 ; *****************************************************************************
 MODO_RESUMEN:
             loc
+            brclr       BANDERAS,$10,return`
+            bclr        BANDERAS,$10
+return`
             rts
 ; *****************************************************************************
 ;                           MODO_LIBRE Subroutine
@@ -414,7 +421,7 @@ TAREA_TECLADO:
 TCL_NOT_READY:
             movb        #$FF, TECLA
             movb        #$FF, TECLA_IN
-            bclr        BANDERAS, $03
+            bclr        BANDERAS,$03
             jmp         RETURN_TT
 REBOTES:
             movb        TECLA, TECLA_IN
@@ -424,7 +431,7 @@ REBOTES:
             jmp         RETURN_TT
 CHECK_ARRAY:
             brclr       BANDERAS,$01,RETURN_TT
-            bclr        BANDERAS, $03
+            bclr        BANDERAS,$03
             jsr         FORMAR_ARRAY
 RETURN_TT:      
             rts            
@@ -532,7 +539,6 @@ RETURN_FA
 CARGAR_LCD: 
             loc
             pshx        
-        ;  TODO: PRINT     
             ldx         #initDisp
             ldab        #4
 loop1`:
@@ -774,6 +780,8 @@ return`
 ;   se muestran guiones acompañados de un mensjae de alerta. Si es un valor 
 ;   valido se muestra la velocidad cuando el vehiculo pasa 100 m después del
 ;   segundo sensor.
+; Ecuacion: TICK_DIS = Veloc / (200 * T_tick) 
+;   => TICK_DIS = (Veloc * 100) / 437
 ;
 ;Entrada:
 ;       VELOC: Velocidad de la bicicleta
@@ -784,17 +792,67 @@ return`
 ;       BIN2: Se envia el valor de la velocidad alcanzada, se apaga (BB) 
 ;       o muestra guiones cuando la bici pasa el sensor
 ; *****************************************************************************
+; TODO
 PANT_CTRL:
             loc
-            brset       BANDERAS,$08,return`
-            BSET        BANDERAS,$08
+            bclr        PIEH,$09
+            bset        PIFH,$09
+            ldaa        Veloc
+            cmpa        #$FF
+            bne         valid_speed`
+        ; fuera de rango 35 =< veloc =< 95
+            ldaa        BIN1
+            cmpa        #$AA
+            beq         next`
             movb        #$AA,BIN1
-            movb        #$AA,BIN2
-            ldx         #COMP_MSG1 
-            ldy         #COMP_MSG2
+            movb        #$AA,BIN2            
+        ; 3 s = T_tick * 137 => TICK_DIS - TICK_EN = 137
+            movw        #138,TICK_DIS
+            movw        #1,TICK_DIS
+            ldx         #A_MSG1 
+            ldy         #A_MSG2
+            jsr         CARGAR_LCD
+            bra         return`
+next`
+            brset       BANDERAS,$08,init_msg`
+            bra         return`
+init_msg`
+            bset        PIEH,$09
+            movb        #$BB,BIN1
+            movb        #$BB,BIN2            
+            ldx         #I_MSG1 
+            ldy         #I_MSG2
             jsr         CARGAR_LCD
 return`
             rts
+valid_speed`
+            brset       BANDERAS,$20,chk_pantflg`
+            bset        BANDERAS,$20
+        ; Ecuacion de Tick_Dis
+            ldab        Veloc
+            ldaa        #100
+            mul
+            ldx         #437
+            idiv
+            inx
+            stx         TICK_DIS
+            movb        #1,TICK_EN
+            bra         return`
+chk_pantflg`
+            ldaa        BIN1
+            brset       BANDERAS,$08,chk_comp_msg`
+            cmpa        #$BB
+            beq         return`
+            bra         init_msg`
+chk_comp_msg`
+            cmpa        #$BB
+            bne         return`
+            movb        Vueltas,BIN1
+            movb        Veloc,BIN2            
+            ldx         #COMP_MSG1 
+            ldy         #COMP_MSG2
+            jsr         CARGAR_LCD
+            bra         return`
 
 ; *********************************** ISR *************************************
 
@@ -839,19 +897,19 @@ ATD_ISR:
 ; *****************************************************************************
 CALCULAR_ISR:
             loc
-            brset       PIFH,$01,PH0
             brset       PIFH,$08,PH3
+            brset       PIFH,$01,PH0
             bra         RETURN`
-PH3:
+PH0:
         ;bset PORTB,$04
-            bset        PIFH, $01 
+            bset        PIFH, $08 
         ;Si el contador de rebotes es distinto de 0 se ejecuta el Calculo
             tst         CONT_REB
             bne         RETURN` 
-            movb        #100,CONT_REB          
-            lda         TICK_MED                    
+            movb        #100,CONT_REB
+            ldaa        TICK_MED                    
             beq         RETURN`
-            bclr        BANDERAS,$08      
+            bclr        BANDERAS,$20      
             ldd         #9062             
         ; Se divide 9062 / TICK_MED   
             ldx         TICK_MED               
@@ -890,12 +948,13 @@ out_of_rng`
             bra         RETURN`
 ;PH1:
 ;PH2:
-PH0:
-            bset        PIFH,$08
+PH3:
+            bset        PIFH,$01
             ldaa        Cont_Reb
             bne         RETURN`
             movb        #100,Cont_Reb
             clr         TICK_MED
+            bset        BANDERAS,$20            
             bset        BANDERAS_2,$02            
 RETURN`
             rti
