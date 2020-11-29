@@ -89,6 +89,7 @@ ADD_L2:         db  $C0
 BANDERAS_2:     ds  1
 V_MIN:          db  35
 V_MAX:          db  95
+CONT_RTI        ds  1
 
             org         $1040
 Teclas:         db  $01,$02,$03,$04,$05,$06,$07,$08,$09,$0B,$00,$0E
@@ -177,9 +178,6 @@ R_MSG2:         fcc "VUELTAS    VELOC"
         ; Key wakeup PTH
             bset        PIEH,$0C          
             bset        PIFH,$0F
-        ; RTI @ 1,027 ms
-            movb        #$17, RTICTL       
-            bset        CRGINT,$80
         ; Ctrl registers y timer enable
             movb        #$90,TSCR1 
         ;PRS = 8    
@@ -205,9 +203,12 @@ loopIATD:
         ;6 mediciones
             movb        #$30,ATD0CTL3     
         ;8 bits, 4 ciclos de atd, PRS 19
-            movb        #$B2,ATD0CTL4
+            movb        #$B3,ATD0CTL4
         ; no multiplex, sin signo, pad7
-        ;    movb        #$87,ATD0CTL5
+            movb        #$87,ATD0CTL5
+        ; RTI @ 1,027 ms
+            movb        #$17, RTICTL       
+            bset        CRGINT,$80
 
 ; *****************************************************************************
 ; *                               Main                                        *
@@ -240,6 +241,7 @@ ARRAY_RST`
             clr         BRILLO
             clr         NumVueltas
             clr         ValorVueltas
+            clr         CONT_RTI
 INIT_LOOP`
             jsr         MODO_CONFIGURACION
             tst         NumVueltas
@@ -277,6 +279,8 @@ GO2_CONFIG`
             jsr         MODO_CONFIGURACION
             bra         RETURN`
 GO2_COMP`
+        ;activate TOI
+            movb        #$83,TSCR2  
             jsr         MODO_COMPETENCIA
             bra         RETURN`
 ; TODO
@@ -354,9 +358,6 @@ MODO_COMPETENCIA:
             jsr         CARGAR_LCD
             clr         VelProm
             clr         Veloc
-        ;activate TOI
-            movb        #$83,TSCR2  
-            
 chk_veloc`
             tst         VELOC
             beq         tst_flg`
@@ -380,6 +381,12 @@ MODO_RESUMEN:
             loc
             brclr       BANDERAS,$10,return`
             bclr        BANDERAS,$10
+            movb        #$08,LEDS
+            ldx         #R_MSG1
+            ldy         #R_MSG2
+            jsr         CARGAR_LCD
+            movb        VelProm,BIN1
+            movb        Vueltas,BIN2 
 return`
             rts
 ; *****************************************************************************
@@ -392,7 +399,7 @@ MODO_LIBRE:
             ldx         #L_MSG1
             ldy         #L_MSG2
             bclr        BANDERAS,$10
-            movb        #$04,LEDS
+            movb        #$01,LEDS
             jsr         CARGAR_LCD
 return`
             movb        #$BB,BIN1 
@@ -863,18 +870,19 @@ chk_comp_msg`
 ;        Calcula BRILLO desde el POT
 ; *****************************************************************************
 ATD_ISR:
-            ldx         #5
+            ldx         #6
             ldd         ADR00H
             addd        ADR01H
             addd        ADR02H
             addd        ADR03H
             addd        ADR04H
+            addd        ADR05H
             idiv
             tfr         X,D
             stab        POT
             ldaa        #20
-            ldx         #255
             mul
+            ldx         #255
             idiv
             tfr         X,D
             stab        BRILLO
@@ -969,13 +977,16 @@ RTI_ISR:
             beq         CHK_TCOUNT`
             dec         Cont_Reb
 CHK_TCOUNT`
-            tst        CONT_200
-            beq        RETURN`
-            dec        CONT_200 
-;INCR200`
-            movb        #$87,ATD0CTL5
+            ldaa        CONT_RTI     
+            cmpa        #200
+            beq         mov_ATD`
+            inc         CONT_RTI
 RETURN`:
             rti
+mov_ATD`
+            movb        #$87,ATD0CTL5
+            clr         CONT_RTI
+            bra         RETURN` 
 
 ; *****************************************************************************
 ;                           OC4_ISR Subroutine
@@ -983,10 +994,9 @@ RETURN`:
 OC4_ISR:
             loc
             ldaa        CONT_TICKS
-            ldab        #100
-            subb        BRILLO
+            ldab        DT
             cba
-            beq         apagar`
+            bge         apagar`
             tst         CONT_TICKS
             beq         check_digit`
 checkN`
