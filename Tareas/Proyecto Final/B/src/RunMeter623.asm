@@ -243,6 +243,7 @@ ARRAY_RST`
             clr         ValorVueltas
             clr         Vueltas
             clr         Veloc
+            clr         VelProm
             clr         CONT_RTI
 INIT_LOOP`
             jsr         MODO_CONFIGURACION
@@ -800,8 +801,8 @@ return`
 ;   se muestran guiones acompañados de un mensjae de alerta. Si es un valor 
 ;   valido se muestra la velocidad cuando el vehiculo pasa 100 m después del
 ;   segundo sensor.
-; Ecuacion: TICK_DIS = 200 / (Veloc * T_tick) 
-;   => TICK_DIS = 9153 / Veloc 
+; Ecuacion: TICK_DIS = [200 / (VelProm * T_tick)] * 3600/1000
+;   => TICK_DIS = 32952 / VelProm 
 ;
 ;Entrada:
 ;       VELOC: Velocidad de la bicicleta
@@ -859,8 +860,8 @@ valid_speed`
             bset        BANDERAS,$20
         ; Ecuacion de Tick_Dis
             clra
-            ldab        Veloc
-            ldx         #9153
+            ldab        VelProm
+            ldx         #32952
             xgdx
             idiv
             inx
@@ -1006,7 +1007,7 @@ RTI_ISR:
             dec         Cont_Reb
 CHK_TCOUNT`
             ldaa        CONT_RTI     
-            cmpa        #200
+            cmpa        CONT_200
             beq         mov_ATD`
             inc         CONT_RTI
 RETURN`:
