@@ -121,9 +121,9 @@ COMP_MSG1:      fcc " M.COMPETENCIA "
 COMP_MSG2:      fcc "VUELTA    VELOC"
                 fcb FIN
 ; Mensaje Calculando
-CALC_MSG1:      fcc "RunMeter 623"
+CALC_MSG1:      fcc " RunMeter  623 "
                 fcb FIN
-CALC_MSG2:      fcc "*CALCULANDO..."
+CALC_MSG2:      fcc " CALCULANDO... "
                 fcb FIN
 ; Mensaje de Alerta
 A_MSG1:         fcc "**  VELOCIDAD **"
@@ -241,6 +241,8 @@ ARRAY_RST`
             clr         BRILLO
             clr         NumVueltas
             clr         ValorVueltas
+            clr         Vueltas
+            clr         Veloc
             clr         CONT_RTI
 INIT_LOOP`
             jsr         MODO_CONFIGURACION
@@ -263,9 +265,10 @@ NO_CHNG`
 CHK_COMP`
             brset       BANDERAS,$C0,GO2_COMP`
             brset       BANDERAS,$80,GO2_RES`
-            brclr       BANDERAS,$10,CHK_CONFIG`
             clr         Veloc
             clr         Vueltas
+            clr         VelProm
+            brclr       BANDERAS,$10,CHK_CONFIG`
             movb        #$03,TSCR2
         ; Check for errors
             bclr        $0F,PIEH
@@ -310,9 +313,10 @@ RETURN`:
 MODO_CONFIGURACION:
             loc
             brclr       BANDERAS,$10,jmodoconfig`
+        ; Primer ingreso a subrutina
             bclr        BANDERAS,$10
-            clr         TICK_EN
-            clr         TICK_DIS
+            movw        0,TICK_EN
+            movw        0,TICK_DIS
             movb        #$02,LEDS
             movb        NumVueltas,BIN1
             movb        #$BB,BIN2
@@ -348,11 +352,13 @@ return`:
 MODO_COMPETENCIA:
             loc
             brclr       BANDERAS,$10,chk_veloc`
+        ; Primer ingreso a subrutina
             bclr        BANDERAS,$10
             movb        #$04,LEDS
             movb        #$BB,BIN1      
             movb        #$BB,BIN2
-            movb        #$09,PIEH
+            bset        PIEH,$09
+            bset        PIFH,$09 
             ldx         #I_MSG1
             ldy         #I_MSG2
             jsr         CARGAR_LCD
@@ -380,14 +386,17 @@ return`
 MODO_RESUMEN:
             loc
             brclr       BANDERAS,$10,return`
+        ; Primer ingreso a subrutina
             bclr        BANDERAS,$10
+            bclr        $0F,PIEH
+            bclr        $0F,PIFH
             movb        #$08,LEDS
             ldx         #R_MSG1
             ldy         #R_MSG2
             jsr         CARGAR_LCD
+return`
             movb        VelProm,BIN1
             movb        Vueltas,BIN2 
-return`
             rts
 ; *****************************************************************************
 ;                           MODO_LIBRE Subroutine
@@ -395,10 +404,10 @@ return`
 MODO_LIBRE:
             loc
             brclr       BANDERAS,$10,return`
+        ; Primer ingreso a subrutina
             bclr        BANDERAS,$10
             ldx         #L_MSG1
             ldy         #L_MSG2
-            bclr        BANDERAS,$10
             movb        #$01,LEDS
             jsr         CARGAR_LCD
 return`
@@ -466,13 +475,13 @@ READ_LOOP:
             nop
             nop
         ; check col 0 of port A
-            brclr       PORTA,$01,WR_TECLA
-            incb
-        ; check col 0 of port A
             brclr       PORTA,$02,WR_TECLA
             incb
         ; check col 0 of port A
             brclr       PORTA,$04,WR_TECLA
+            incb
+        ; check col 0 of port A
+            brclr       PORTA,$08,WR_TECLA
             incb
             lsl         Patron
             ldaa        #$F0
@@ -598,6 +607,10 @@ return`:
 ; *****************************************************************************
 ;                            SEND Subrutine
 ; *****************************************************************************
+; Descripcion:
+;     Se encarga de enviar a la pantalla LCD el dato o comando que 
+;   recibe conforme al estado de la bandera en BANDERAS_2.0: SEND_DATA.
+; ****************************************************************************
 SEND:       loc
             psha
             anda        #$F0
@@ -787,8 +800,8 @@ return`
 ;   se muestran guiones acompañados de un mensjae de alerta. Si es un valor 
 ;   valido se muestra la velocidad cuando el vehiculo pasa 100 m después del
 ;   segundo sensor.
-; Ecuacion: TICK_DIS = Veloc / (200 * T_tick) 
-;   => TICK_DIS = (Veloc * 100) / 437
+; Ecuacion: TICK_DIS = 200 / (Veloc * T_tick) 
+;   => TICK_DIS = 9153 / Veloc 
 ;
 ;Entrada:
 ;       VELOC: Velocidad de la bicicleta
@@ -814,32 +827,41 @@ PANT_CTRL:
             movb        #$AA,BIN1
             movb        #$AA,BIN2            
         ; 3 s = T_tick * 137 => TICK_DIS - TICK_EN = 137
-            movw        #138,TICK_DIS
-            movw        #1,TICK_DIS
+            movw        #137,TICK_DIS
+            movw        #0,TICK_EN
+        ; Pant_flag ON
+            bset        BANDERAS,$08
             ldx         #A_MSG1 
             ldy         #A_MSG2
             jsr         CARGAR_LCD
-            bra         return`
+            beq         return`
 next`
             brset       BANDERAS,$08,init_msg`
             bra         return`
 init_msg`
-            bset        PIEH,$09
             movb        #$BB,BIN1
             movb        #$BB,BIN2            
             ldx         #I_MSG1 
             ldy         #I_MSG2
             jsr         CARGAR_LCD
+            ldaa        Vueltas
+            cmpa        NumVueltas
+            beq         skip`
+            bset        PIEH,$09
+skip`
+            bclr        BANDERAS,$20
+            clr         Veloc
+
 return`
             rts
 valid_speed`
             brset       BANDERAS,$20,chk_pantflg`
             bset        BANDERAS,$20
         ; Ecuacion de Tick_Dis
+            clra
             ldab        Veloc
-            ldaa        #100
-            mul
-            ldx         #437
+            ldx         #9153
+            xgdx
             idiv
             inx
             stx         TICK_DIS
@@ -854,11 +876,15 @@ chk_pantflg`
 chk_comp_msg`
             cmpa        #$BB
             bne         return`
-            movb        Vueltas,BIN1
-            movb        Veloc,BIN2            
+            bset        PIEH,$09
+        ; 3 segundos hasta que se deshabilite
+            ;movw        #138,TICK_DIS
+            ;movw        #1,TICK_EN
             ldx         #COMP_MSG1 
             ldy         #COMP_MSG2
             jsr         CARGAR_LCD
+            movb        Veloc,BIN1
+            movb        Vueltas,BIN2
             bra         return`
 
 ; *********************************** ISR *************************************
@@ -893,37 +919,39 @@ ATD_ISR:
 
 ; *****************************************************************************
 ;                           CALCULAR_ISR Subroutine
+; *****************************************************************************
 ;   Descripcion:
 ;
 ;   Ecuaciones:
 ;    * Veloc = 55 / (TICK_MED * 21.85*10^(-3)) * (3600 / 1000) ,
 ;    Si 21.85*10^(-3)= 437 / 20000
-;   => Veloc ~ 9062/ (TICK_MED) [km/h]
+;   => Veloc = 9062/ (TICK_MED) [km/h]
 ;    
 ;   => VelProm = ( VelProm * (Vueltas-1) + Veloc ) / Vueltas
 ;
 ; *****************************************************************************
 CALCULAR_ISR:
             loc
-            brset       PIFH,$08,PH3
             brset       PIFH,$01,PH0
+            brset       PIFH,$08,PH3
             bra         RETURN`
 PH0:
         ;bset PORTB,$04
-            bset        PIFH, $08 
+            bset        PIFH, $01 
         ;Si el contador de rebotes es distinto de 0 se ejecuta el Calculo
             tst         CONT_REB
             bne         RETURN` 
             movb        #100,CONT_REB
-            ldaa        TICK_MED                    
+            ldx         TICK_MED                    
             beq         RETURN`
             bclr        BANDERAS,$20      
             ldd         #9062             
         ; Se divide 9062 / TICK_MED   
-            ldx         TICK_MED               
             idiv
+            cpx         #$00FF
+        ; Revisamos rangos de velocidad
+            bhi         out_of_rng`
             tfr         X,D                
-        ; Revisamos rango de velocidad    
             cmpb        V_MIN
             blo         out_of_rng`
             cmpb        V_MAX
@@ -957,11 +985,11 @@ out_of_rng`
 ;PH1:
 ;PH2:
 PH3:
-            bset        PIFH,$01
+            bset        PIFH,$08
             ldaa        Cont_Reb
             bne         RETURN`
             movb        #100,Cont_Reb
-            clr         TICK_MED
+            movw        #0,TICK_MED
             bset        BANDERAS,$20            
             bset        BANDERAS_2,$02            
 RETURN`
@@ -1043,7 +1071,6 @@ dig3`
             cmpa        #3
             bne         dig4`
             bclr        PTP, $02
-            brset       BANDERAS,$08,ndig3`
             movb        DISP3, PORTB
             bset        PTJ, $02
 ndig3`
@@ -1052,7 +1079,6 @@ dig4`
             cmpa        #4
             bne         digleds`
             bclr        PTP, $01
-            brset       BANDERAS,$08,ndig4`
             ldaa        DISP4
             cmpa        #$3F
             beq         ndig4`
@@ -1092,12 +1118,14 @@ TCNT_ISR:
             loc
             ldd         TCNT
             movb        #$FF,TFLG2
-            ldaa        TICK_MED
-            cmpa        #255
+            ldx         TICK_MED
+            cpx         #65535
             beq         chk_en`
         ; Prueba Calc_Ticks   
             brclr       BANDERAS,$20,chk_en`
-            inc         TICK_MED
+            ldx         TICK_MED
+            inx
+            stx         TICK_MED
 chk_en`
             tst         VELOC
             beq         return`
