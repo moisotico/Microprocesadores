@@ -828,7 +828,7 @@ PANT_CTRL:
             movb        #$AA,BIN2            
         ; 3 s = T_tick * 137 => TICK_DIS - TICK_EN = 137
             movw        #137,TICK_DIS
-            movw        #0,TICK_EN
+            movw        #1,TICK_EN
         ; Pant_flag ON
             bset        BANDERAS,$08
             ldx         #A_MSG1 
@@ -878,8 +878,8 @@ chk_comp_msg`
             bne         return`
             bset        PIEH,$09
         ; 3 segundos hasta que se deshabilite
-            ;movw        #138,TICK_DIS
-            ;movw        #1,TICK_EN
+            movw        #138,TICK_DIS
+            movw        #1,TICK_EN
             ldx         #COMP_MSG1 
             ldy         #COMP_MSG2
             jsr         CARGAR_LCD
