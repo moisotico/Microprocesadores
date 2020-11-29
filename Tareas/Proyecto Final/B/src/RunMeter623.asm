@@ -816,7 +816,7 @@ return`
 PANT_CTRL:
             loc
             bclr        PIEH,$09
-            bset        PIFH,$09
+        ;    bset        PIFH,$09
             ldaa        Veloc
             cmpa        #$FF
             bne         valid_speed`
@@ -827,7 +827,7 @@ PANT_CTRL:
             movb        #$AA,BIN1
             movb        #$AA,BIN2            
         ; 3 s = T_tick * 137 => TICK_DIS - TICK_EN = 137
-            movw        #137,TICK_DIS
+            movw        #138,TICK_DIS
             movw        #1,TICK_EN
         ; Pant_flag ON
             bset        BANDERAS,$08
@@ -836,7 +836,7 @@ PANT_CTRL:
             jsr         CARGAR_LCD
             beq         return`
 next`
-            brset       BANDERAS,$08,init_msg`
+            brclr       BANDERAS,$08,init_msg`
             bra         return`
 init_msg`
             movb        #$BB,BIN1
@@ -1130,13 +1130,18 @@ chk_en`
             tst         VELOC
             beq         return`
             ldx         TICK_EN
+            cpx         #$FFFF
+            beq         skip`
        ; Si TICK_EN = $0000, en siguiente ejecucion dex lo pasa a $FFFF
             dex
             bne         No_Set`
             bset        BANDERAS,$08
 No_Set`
             stx         TICK_EN
+skip`
             ldx         TICK_DIS
+            cpx         #$FFFF
+            beq         return`
        ; Si TICK_DIS = $0000, en siguiente ejecucion dex lo pasa a $FFFF
             dex
             bne         No_Clr`
