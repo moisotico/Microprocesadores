@@ -1285,8 +1285,13 @@ valid_speed`
             xgdx
             idiv
             inx
+            stx         TICK_EN
+            clra
+            ldab        VelProm
+            ldx         #49428
+            xgdx
+            idiv
             stx         TICK_DIS
-            movb        #1,TICK_EN
             bra         return`
 chk_pantflg`
             ldaa        BIN1
@@ -1300,9 +1305,6 @@ chk_comp_msg`
             bset        PIEH,$09
             movb        Veloc,BIN1
             movb        Vueltas,BIN2
-        ; 3 segundos hasta que se deshabilite
-            ;movw        #138,TICK_DIS
-            ;movw        #1,TICK_EN
             ldx         #COMP_MSG1 
             ldy         #COMP_MSG2
             jsr         CARGAR_LCD
