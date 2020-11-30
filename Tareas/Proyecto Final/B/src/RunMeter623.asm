@@ -14,10 +14,12 @@
 ; del uso del teclado matricial de la tarjeta y los  displays de 7 segmentos 
 ; para mostrar el valor LengthOK.
 ;  - LIBRE: Muestra un mensaje de bienvenida en la pantalla LCD, se utiliza si 
-; no se desean relizar selecciones de tubos.
-; * TODO * :
-; - COMPETENCIA: Se realiza 
-; - RESUMEN: .
+; no se desean relizar mediciones.
+; - COMPETENCIA: Se se calcula la velocidad de un ciclista con base en el 
+; tiempo transcurrido entre la detección de los sensores S1 y S2 así como las 
+; vueltas realizadas hasta llegar a NumVueltas.
+; - RESUMEN: Se despliega la velocidad promedio de las vueltas detectadas en el
+; Modo Competencia, así como la cantidad de vueltas realizadas.
 ; *****************************************************************************
 ; *                           Data Structures                                 *
 ; *****************************************************************************
@@ -85,7 +87,7 @@ Clear_LCD:      db  $01
 ADD_L1:         db  $80
 ADD_L2:         db  $C0
    ;-- BANDERAS_2:  .7:X, .6:X , .5:X, .4:X,
-   ;                .3:X, 2: X, 1:Calc_flag, 0SendData_flg
+   ;                .3:X, 2: X, 1:Calc_flag, 0: SendData_flg
 BANDERAS_2:     ds  1
 V_MIN:          db  35
 V_MAX:          db  95
@@ -214,12 +216,11 @@ loopIATD:
 ; *                               Main                                        *
 ; *****************************************************************************
 ;Descrip:
-;   Inicio del programa principal, en el se hace la deteccion de los modos por
+;   Inicio del programa principal,  en el se hace la deteccion de los modos por
 ; medio de los dipswitch en PTH7 y PTH6, ademas de activar/desactivar PTIH y
 ; TCNT 
 ;Entradas:
 ;   * NumVueltas: debe ser mayor a 0 para salir de Modo Config    
-;Salidas
 ; *****************************************************************************
             loc
             lds         #$3BFF
@@ -299,6 +300,322 @@ GO2_RES`
 RETURN`:     
             jmp         MAIN_LOOP`
 
+; *********************************** ISR *************************************
+
+; *****************************************************************************
+;                           ATD_ISR Subroutine
+; *****************************************************************************
+;Descripcion:
+;    Calcula BRILLO desde el POT con lo cual se controla el brillo del diplay 
+;  de 7 segmentos
+;Entrada:
+;   * ADR00H,ADR01H,...,ADR05H: Registros de datos del convertidor 
+;       analogico-digital        
+;Salida:
+;   * Brillo: variable correspondiente a k en el ciclo de trabajo del control
+;       visto en el algoritmo de los leds y pantalla de 7 segmentos.
+;   * DT: Duty time, variable que determina cuanto tiempo deben permancer los
+;       leds y pantalla de 7 segmentos.
+; *****************************************************************************
+ATD_ISR:
+            ldx         #6
+            ldd         ADR00H
+            addd        ADR01H
+            addd        ADR02H
+            addd        ADR03H
+            addd        ADR04H
+            addd        ADR05H
+            idiv
+            tfr         X,D
+            stab        POT
+            ldaa        #20
+            mul
+            ldx         #255
+            idiv
+            tfr         X,D
+            stab        BRILLO
+            ldaa        #5
+            mul
+            stab        DT          
+            rti
+
+; *****************************************************************************
+;                           CALCULAR_ISR Subroutine
+; *****************************************************************************
+;Descripcion:
+;       Calcula la velocidad, así como los ticks necesarios para mostrar y 
+; borrar la pantalla.
+;Entrada:
+;   * Cont_Reb: cancela los rebotes de los botones SW2 y SW5 
+;Salida:
+;   * Veloc: Velocidad detectada en Modo Competencia
+;   * VelProm: Promedio de las velocidades anteriores, es igual a Veloc en la 
+;              primera vuelta
+;Ecuaciones:
+;   * Veloc = 55 / (TICK_MED * 21.85*10^(-3)) * (3600 / 1000) ,
+;    Si 21.85*10^(-3)= 437 / 20000
+;   => Veloc = 9062/ (TICK_MED) [km/h]
+;    
+;   => VelProm = ( VelProm * (Vueltas-1) + Veloc ) / Vueltas
+;
+; *****************************************************************************
+CALCULAR_ISR:
+            loc
+            brset       PIFH,$01,PH0
+            brset       PIFH,$08,PH3
+            bra         RETURN`
+PH0:
+        ;bset PORTB,$04
+            bset        PIFH, $01 
+        ;Si el contador de rebotes es distinto de 0 se ejecuta el Calculo
+            tst         CONT_REB
+            bne         RETURN` 
+            movb        #100,CONT_REB
+            ldx         TICK_MED                    
+            beq         RETURN`
+            bclr        BANDERAS,$20      
+            ldd         #9062             
+        ; Se divide 9062 / TICK_MED   
+            idiv
+            cpx         #$00FF
+        ; Revisamos rangos de velocidad
+            bhi         out_of_rng`
+            tfr         X,D                
+            cmpb        V_MIN
+            blo         out_of_rng`
+            cmpb        V_MAX
+            bhi         out_of_rng`
+            stab        Veloc
+            inc         Vueltas
+        ; Revisamos si existe un valor en VelProm
+            ldaa        VelProm
+            bne         calc_vprom`
+        ; Para primer valor
+            movb        Veloc,VelProm
+            bra         RETURN`
+        ; Calculamos con formula de VelProm
+calc_vprom`
+            ldab        Vueltas
+            tfr         B,X
+            decb
+            mul
+        ; Intercambio para poder sumar Veloc 
+            xgdy
+            ldab        Veloc
+            aby
+            xgdy
+            idiv
+            tfr         X,D                
+            stab        VelProm
+            bra         RETURN`
+out_of_rng`
+            movb        #$FF,Veloc
+            bra         RETURN`
+;PH1:
+;PH2:
+PH3:
+            bset        PIFH,$08
+            ldaa        Cont_Reb
+            bne         RETURN`
+            movb        #100,Cont_Reb
+            movw        #0,TICK_MED
+            bset        BANDERAS,$20            
+            bset        BANDERAS_2,$02            
+RETURN`
+            rti
+
+; *****************************************************************************
+;                           RTI_ISR Subroutine
+; *****************************************************************************
+;Descripcion:
+;   Subrutina encarga del manejo de los rebotes de los botones     
+;Entrada:
+;   * CONT_REB: se verifica que no sea 0
+;   * Cont_200: constante con la que se compara CONT_RTI
+;   * CONT_RTI: variable con la que se define cuando escribir a ATD0CTL5
+;Salida:
+;   * CONT_REB: si no es cero se decrementa
+; *****************************************************************************
+RTI_ISR:
+            loc
+            bset        CRGFLG,$80
+            tst         Cont_Reb
+            beq         CHK_TCOUNT`
+            dec         Cont_Reb
+CHK_TCOUNT`
+            ldaa        CONT_RTI     
+            cmpa        CONT_200
+            beq         mov_ATD`
+            inc         CONT_RTI
+RETURN`:
+            rti
+mov_ATD`
+            movb        #$87,ATD0CTL5
+            clr         CONT_RTI
+            bra         RETURN` 
+
+; *****************************************************************************
+;                           OC4_ISR Subroutine
+; *****************************************************************************
+;Descripcion:
+;   Subrutina encargada del manejo de la pantalla de 7 segmentos, el contenido
+; de los displays, el brillo y la subrutina bcd 7 segmentos. Ademas decrementa
+; CONT_DELAY, asistiendo al control de la pantalla LED.
+;Entrada:
+;   * DT: determina si se apaga la pantalla, controlando asi el brillo con
+;       el valor obtenido en ATD_ISR.
+;   * DISP1,DISP2,DISP3,DISP4: Contenido que se debe mostrar en el display de
+;       7 segmentos
+;   * LEDS: Variable que determina el patron de los leds
+;Salida:
+;   * CONT_DELAY: contador de retraso para contador de pantalla de LEDS
+;   * CONT_7SEG: contador de retraso para contador de pantalla de 7 segmentos
+; *****************************************************************************
+OC4_ISR:
+            loc
+            ldaa        CONT_TICKS
+            ldab        DT
+            cba
+            bge         apagar`
+            tst         CONT_TICKS
+            beq         check_digit`
+checkN`
+            cmpa        #100
+            beq         changeDigit`
+incticks`
+            inc         CONT_TICKS
+            jmp         part2`
+;Apagar
+apagar`
+            movb        #$FF,PTP
+            bclr        PTJ,$02 ; enciendo
+            movb        #$0, PORTB
+            bra         checkN`
+changeDigit`
+            movb        #$0,CONT_TICKS
+            ldaa        #5
+            cmpa        CONT_DIG
+            bne         jpart2`
+            clr         CONT_DIG
+jpart2`
+            inc         CONT_DIG
+            bra         part2`
+check_digit`
+            ldaa        CONT_DIG
+            cmpa        #1
+            bne         dig2`
+            bclr        PTP, $08
+            movb        DISP1, PORTB
+            bset        PTJ, $02
+            bra         incticks`
+dig2`
+            cmpa        #2
+            bne         dig3`
+            bclr        PTP, $04
+            ldaa        DISP2
+            cmpa        #$3F
+            beq         ndig2`
+            movb        DISP2, PORTB
+            bset        PTJ, $02
+ndig2`
+            bra         incticks`
+dig3`
+            cmpa        #3
+            bne         dig4`
+            bclr        PTP, $02
+            movb        DISP3, PORTB
+            bset        PTJ, $02
+ndig3`
+            bra         incticks`
+dig4`
+            cmpa        #4
+            bne         digleds`
+            bclr        PTP, $01
+            ldaa        DISP4
+            cmpa        #$3F
+            beq         ndig4`
+            movb        DISP4, PORTB
+            bset        PTJ, $02
+ndig4`
+            jmp         incticks`
+digleds`
+            movb        LEDS, PORTB
+            bclr        PTJ, $02
+            inc         CONT_TICKS
+
+part2`
+            tst         CONT_DELAY
+            beq         tst7seg`
+            dec         CONT_DELAY
+tst7seg`
+            ldx         CONT_7SEG
+            beq         JBCD_7SEG`
+            dex
+            stx         CONT_7SEG
+returnOC4
+            ldd         TCNT
+            addd        #60
+            std         TC4
+            rti
+JBCD_7SEG`
+            movw        #5000,CONT_7SEG
+            jsr         BCD_7SEG
+            jsr         CONV_BIN_BCD
+            bra         returnOC4
+
+; *****************************************************************************
+;                           TCNT_ISR Subroutine
+; *****************************************************************************
+;Descripcion:
+;   Interrupcion por overflow del contador de tiempo. Encargada de incrementar
+; los ticks que se usan para medir la velocidad del ciclista, y decrementando 
+; TICK_EN y TICK_DIS para agotar el tiempo que se muestran las velocidades y 
+; vueltas en la pantalla
+;Salida:
+;   * TICK_VEL: Ticks para medir la velocidad, se incrementa cuando el ciclista
+;           se encuentra entre los dos sensores
+;   * TICK_EN: Ticks restantes para activar la velocidad del medidor
+;   * TICK_DIS: Ticks necesarios para eliminar la velocidad del medidor.
+; *****************************************************************************
+TCNT_ISR:
+            loc
+            ldd         TCNT
+            movb        #$FF,TFLG2
+            ldx         TICK_MED
+            cpx         #65535
+            beq         chk_en`
+        ; Prueba Calc_Ticks   
+            brclr       BANDERAS,$20,chk_en`
+            ldx         TICK_MED
+            inx
+            stx         TICK_MED
+chk_en`
+            tst         VELOC
+            beq         return`
+            ldx         TICK_EN
+            cpx         #$FFFF
+            beq         skip`
+       ; Si TICK_EN = $0000, en siguiente ejecucion dex lo pasa a $FFFF
+            dex
+            bne         No_Set`
+            bset        BANDERAS,$08
+No_Set`
+            stx         TICK_EN
+skip`
+            ldx         TICK_DIS
+            cpx         #$FFFF
+            beq         return`
+       ; Si TICK_DIS = $0000, en siguiente ejecucion dex lo pasa a $FFFF
+            dex
+            bne         No_Clr`
+            bclr        BANDERAS,$08
+No_Clr`
+            stx         TICK_DIS
+return`
+            rti        
+
+
+
 ; ************************************ MODOS **********************************
 
 ; *****************************************************************************
@@ -309,7 +626,6 @@ RETURN`:
 ; del sensor. Para esto se debe verificar que el valor ingresado en el teclado
 ; sea valido es decir entre el rango de 5 y 25 vueltas.
 ; Si no es valido se borra, caso contrario se muestra en pantalla.
-;Paso de parametros:
 ;Entrada:
 ;      * ValorVueltas: Numero de vueltas a ingresar y validar.
 ;Salida:
@@ -379,6 +695,7 @@ MODO_COMPETENCIA:
             jsr         CARGAR_LCD
             clr         VelProm
             clr         Veloc
+            clr         Vueltas
 chk_veloc`
             tst         VELOC
             beq         tst_flg`
@@ -983,326 +1300,13 @@ chk_comp_msg`
             cmpa        #$BB
             bne         return`
             bset        PIEH,$09
+            movb        Veloc,BIN1
+            movb        Vueltas,BIN2
         ; 3 segundos hasta que se deshabilite
             movw        #138,TICK_DIS
             movw        #1,TICK_EN
             ldx         #COMP_MSG1 
             ldy         #COMP_MSG2
             jsr         CARGAR_LCD
-            movb        Veloc,BIN1
-            movb        Vueltas,BIN2
             bra         return`
 
-; *********************************** ISR *************************************
-
-; *****************************************************************************
-;                           ATD_ISR Subroutine
-; *****************************************************************************
-;Descripcion:
-;    Calcula BRILLO desde el POT con lo cual se controla el brillo del diplay 
-;  de 7 segmentos
-;Entrada:
-;   * ADR00H,ADR01H,...,ADR05H: Registros de datos del convertidor 
-;       analogico-digital        
-;Salida:
-;   * Brillo: variable correspondiente a k en el ciclo de trabajo del control
-;       visto en el algoritmo de los leds y pantalla de 7 segmentos.
-;   * DT: Duty time, variable que determina cuanto tiempo deben permancer los
-;       leds y pantalla de 7 segmentos.
-; *****************************************************************************
-ATD_ISR:
-            ldx         #6
-            ldd         ADR00H
-            addd        ADR01H
-            addd        ADR02H
-            addd        ADR03H
-            addd        ADR04H
-            addd        ADR05H
-            idiv
-            tfr         X,D
-            stab        POT
-            ldaa        #20
-            mul
-            ldx         #255
-            idiv
-            tfr         X,D
-            stab        BRILLO
-            ldaa        #5
-            mul
-            stab        DT          
-            rti
-
-; *****************************************************************************
-;                           CALCULAR_ISR Subroutine
-; *****************************************************************************
-;Descripcion:
-;       Calcula la velocidad de los tubos, así como los ticks necesarios
-;   para mostrar y borrar la pantalla.
-;Entrada:
-;   * Cont_Reb: cancela los rebotes de los botones SW2 y SW5 
-;Salida:
-;   * Veloc: Velocidad detectada en Modo Competencia
-;   * VelProm: Promedio de las velocidades anteriores, es igual a Veloc en la 
-;              primera vuelta
-;Ecuaciones:
-;   * Veloc = 55 / (TICK_MED * 21.85*10^(-3)) * (3600 / 1000) ,
-;    Si 21.85*10^(-3)= 437 / 20000
-;   => Veloc = 9062/ (TICK_MED) [km/h]
-;    
-;   => VelProm = ( VelProm * (Vueltas-1) + Veloc ) / Vueltas
-;
-; *****************************************************************************
-CALCULAR_ISR:
-            loc
-            brset       PIFH,$01,PH0
-            brset       PIFH,$08,PH3
-            bra         RETURN`
-PH0:
-        ;bset PORTB,$04
-            bset        PIFH, $01 
-        ;Si el contador de rebotes es distinto de 0 se ejecuta el Calculo
-            tst         CONT_REB
-            bne         RETURN` 
-            movb        #100,CONT_REB
-            ldx         TICK_MED                    
-            beq         RETURN`
-            bclr        BANDERAS,$20      
-            ldd         #9062             
-        ; Se divide 9062 / TICK_MED   
-            idiv
-            cpx         #$00FF
-        ; Revisamos rangos de velocidad
-            bhi         out_of_rng`
-            tfr         X,D                
-            cmpb        V_MIN
-            blo         out_of_rng`
-            cmpb        V_MAX
-            bhi         out_of_rng`
-            stab        Veloc
-            inc         Vueltas
-        ; Revisamos si existe un valor en VelProm
-            ldaa        VelProm
-            bne         calc_vprom`
-        ; Para primer valor
-            movb        Veloc,VelProm
-            bra         RETURN`
-        ; Calculamos con formula de VelProm
-calc_vprom`
-            ldab        Vueltas
-            tfr         B,X
-            decb
-            mul
-        ; Intercambio para poder sumar Veloc 
-            xgdy
-            ldab        Veloc
-            aby
-            xgdy
-            idiv
-            tfr         X,D                
-            stab        VelProm
-            bra         RETURN`
-out_of_rng`
-            movb        #$FF,Veloc
-            bra         RETURN`
-;PH1:
-;PH2:
-PH3:
-            bset        PIFH,$08
-            ldaa        Cont_Reb
-            bne         RETURN`
-            movb        #100,Cont_Reb
-            movw        #0,TICK_MED
-            bset        BANDERAS,$20            
-            bset        BANDERAS_2,$02            
-RETURN`
-            rti
-
-; *****************************************************************************
-;                           RTI_ISR Subroutine
-; *****************************************************************************
-;Descripcion:
-;   Subrutina encarga del manejo de los rebotes de los botones     
-;Entrada:
-;   * CONT_REB: se verifica que no sea 0
-;   * Cont_200: constante con la que se compara CONT_RTI
-;   * CONT_RTI: variable con la que se define cuando escribir a ATD0CTL5
-;Salida:
-;   * CONT_REB: si no es cero se decrementa
-; *****************************************************************************
-RTI_ISR:
-            loc
-            bset        CRGFLG,$80
-            tst         Cont_Reb
-            beq         CHK_TCOUNT`
-            dec         Cont_Reb
-CHK_TCOUNT`
-            ldaa        CONT_RTI     
-            cmpa        CONT_200
-            beq         mov_ATD`
-            inc         CONT_RTI
-RETURN`:
-            rti
-mov_ATD`
-            movb        #$87,ATD0CTL5
-            clr         CONT_RTI
-            bra         RETURN` 
-
-; *****************************************************************************
-;                           OC4_ISR Subroutine
-; *****************************************************************************
-;Descripcion:
-;   Subrutina encargada del manejo de la pantalla de 7 segmentos, el contenido
-; de los displays, el brillo y la subrutina bcd 7 segmentos. Ademas decrementa
-; CONT_DELAY, asistiendo al control de la pantalla LED.
-;Entrada:
-;   * DT: determina si se apaga la pantalla, controlando asi el brillo con
-;       el valor obtenido en ATD_ISR.
-;   * DISP1,DISP2,DISP3,DISP4: Contenido que se debe mostrar en el display de
-;       7 segmentos
-;   * LEDS:Variable que determina el patron de los leds
-;Salida:
-;   * CONT_DELAY: contador de retraso para contador de pantalla de LEDS
-;   * CONT_7SEG: contador de retraso para contador de pantalla de 7 segmentos
-; *****************************************************************************
-OC4_ISR:
-            loc
-            ldaa        CONT_TICKS
-            ldab        DT
-            cba
-            bge         apagar`
-            tst         CONT_TICKS
-            beq         check_digit`
-checkN`
-            cmpa        #100
-            beq         changeDigit`
-incticks`
-            inc         CONT_TICKS
-            jmp         part2`
-;Apagar
-apagar`
-            movb        #$FF,PTP
-            bclr        PTJ,$02 ; enciendo
-            movb        #$0, PORTB
-            bra         checkN`
-changeDigit`
-            movb        #$0,CONT_TICKS
-            ldaa        #5
-            cmpa        CONT_DIG
-            bne         jpart2`
-            clr         CONT_DIG
-jpart2`
-            inc         CONT_DIG
-            bra         part2`
-check_digit`
-            ldaa        CONT_DIG
-            cmpa        #1
-            bne         dig2`
-            bclr        PTP, $08
-            movb        DISP1, PORTB
-            bset        PTJ, $02
-            bra         incticks`
-dig2`
-            cmpa        #2
-            bne         dig3`
-            bclr        PTP, $04
-            ldaa        DISP2
-            cmpa        #$3F
-            beq         ndig2`
-            movb        DISP2, PORTB
-            bset        PTJ, $02
-ndig2`
-            bra         incticks`
-dig3`
-            cmpa        #3
-            bne         dig4`
-            bclr        PTP, $02
-            movb        DISP3, PORTB
-            bset        PTJ, $02
-ndig3`
-            bra         incticks`
-dig4`
-            cmpa        #4
-            bne         digleds`
-            bclr        PTP, $01
-            ldaa        DISP4
-            cmpa        #$3F
-            beq         ndig4`
-            movb        DISP4, PORTB
-            bset        PTJ, $02
-ndig4`
-            jmp         incticks`
-digleds`
-            movb        LEDS, PORTB
-            bclr        PTJ, $02
-            inc         CONT_TICKS
-
-part2`
-            tst         CONT_DELAY
-            beq         tst7seg`
-            dec         CONT_DELAY
-tst7seg`
-            ldx         CONT_7SEG
-            beq         JBCD_7SEG`
-            dex
-            stx         CONT_7SEG
-returnOC4
-            ldd         TCNT
-            addd        #60
-            std         TC4
-            rti
-JBCD_7SEG`
-            movw        #5000,CONT_7SEG
-            jsr         BCD_7SEG
-            jsr         CONV_BIN_BCD
-            bra         returnOC4
-
-; *****************************************************************************
-;                           TCNT_ISR Subroutine
-; *****************************************************************************
-;Descripcion:
-;   Interrupcion por overflow del contador de tiempo. Encargada de incrementar
-; los ticks que se usan para medir la velocidad del ciclista, y decrementando 
-; TICK_EN y TICK_DIS para agotar el tiempo que se muestran las velocidades y 
-; vueltas en la pantalla
-;Salida:
-;   * TICK_VEL: Ticks para medir la velocidad, se incrementa cuando el ciclista
-;           se encuentra entre los dos sensores
-;   * TICK_EN: Ticks restantes para activar la velocidad del medidor
-;   * TICK_DIS: Ticks necesarios para eliminar la velocidad del medidor.
-; *****************************************************************************
-TCNT_ISR:
-            loc
-            ldd         TCNT
-            movb        #$FF,TFLG2
-            ldx         TICK_MED
-            cpx         #65535
-            beq         chk_en`
-        ; Prueba Calc_Ticks   
-            brclr       BANDERAS,$20,chk_en`
-            ldx         TICK_MED
-            inx
-            stx         TICK_MED
-chk_en`
-            tst         VELOC
-            beq         return`
-            ldx         TICK_EN
-            cpx         #$FFFF
-            beq         skip`
-       ; Si TICK_EN = $0000, en siguiente ejecucion dex lo pasa a $FFFF
-            dex
-            bne         No_Set`
-            bset        BANDERAS,$08
-No_Set`
-            stx         TICK_EN
-skip`
-            ldx         TICK_DIS
-            cpx         #$FFFF
-            beq         return`
-       ; Si TICK_DIS = $0000, en siguiente ejecucion dex lo pasa a $FFFF
-            dex
-            bne         No_Clr`
-            bclr        BANDERAS,$08
-No_Clr`
-            stx         TICK_DIS
-return`
-            rti        
