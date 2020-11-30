@@ -582,35 +582,33 @@ TCNT_ISR:
             ldd         TCNT
             movb        #$FF,TFLG2
             ldx         TICK_MED
-            cpx         #65535
+            cpx         #9062
             beq         chk_en`
         ; Prueba Calc_Ticks   
-            brclr       BANDERAS,$20,chk_en`
+            ;brclr       BANDERAS,$20,chk_en`
             ldx         TICK_MED
             inx
             stx         TICK_MED
 chk_en`
-            tst         VELOC
-            beq         return`
             ldx         TICK_EN
-            cpx         #$FFFF
-            beq         skip`
-       ; Si TICK_EN = $0000, en siguiente ejecucion dex lo pasa a $FFFF
+            cpx         #0
+            beq         set`
+        ; Si TICK_EN != $0000
             dex
-            bne         No_Set`
-            bset        BANDERAS,$08
-No_Set`
             stx         TICK_EN
-skip`
+            bra         chk_dis`
+set`
+            bset        BANDERAS,$08
+chk_dis`
             ldx         TICK_DIS
-            cpx         #$FFFF
-            beq         return`
+            cpx         #$0
+            beq         clear`
        ; Si TICK_DIS = $0000, en siguiente ejecucion dex lo pasa a $FFFF
             dex
-            bne         No_Clr`
-            bclr        BANDERAS,$08
-No_Clr`
             stx         TICK_DIS
+            bra         return`
+clear`
+            bclr        BANDERAS,$08
 return`
             rti        
 
@@ -1251,7 +1249,7 @@ PANT_CTRL:
             movb        #$AA,BIN2            
         ; 3 s = T_tick * 137 => TICK_DIS - TICK_EN = 137
             movw        #138,TICK_DIS
-            movw        #1,TICK_EN
+            movw        #0,TICK_EN
         ; Pant_flag ON
             bset        BANDERAS,$08
             ldx         #A_MSG1 
@@ -1303,8 +1301,8 @@ chk_comp_msg`
             movb        Veloc,BIN1
             movb        Vueltas,BIN2
         ; 3 segundos hasta que se deshabilite
-            movw        #138,TICK_DIS
-            movw        #1,TICK_EN
+            ;movw        #138,TICK_DIS
+            ;movw        #1,TICK_EN
             ldx         #COMP_MSG1 
             ldy         #COMP_MSG2
             jsr         CARGAR_LCD
