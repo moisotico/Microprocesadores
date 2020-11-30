@@ -213,7 +213,13 @@ loopIATD:
 ; *****************************************************************************
 ; *                               Main                                        *
 ; *****************************************************************************
-;   Descrip: Inicio del programa principal
+;Descrip:
+;   Inicio del programa principal, en el se hace la deteccion de los modos por
+; medio de los dipswitch en PTH7 y PTH6, ademas de activar/desactivar PTIH y
+; TCNT 
+;Entradas:
+;   * NumVueltas: debe ser mayor a 0 para salir de Modo Config    
+;Salidas
 ; *****************************************************************************
             loc
             lds         #$3BFF
@@ -350,6 +356,14 @@ return`:
 ; *****************************************************************************
 ;                        MODO_COMPETENCIA Subroutine
 ; *****************************************************************************
+;Descripcion:
+;  Modo de operación del sensor, en donde se calcula la velocidad del ciclista
+; mediante los botones SW2 y SW5, y llama a la subrutina de control PANT_CTRL
+; para mostrar diferentes mensajes en la pantalla.
+;Entrada:
+;      * BANDERAS_2.0: Indica cuando imprime el mensaje "Calculando...".
+;      * Veloc: Velocidad de la bicicleta de CALCILAR_ISR.
+; *****************************************************************************
 MODO_COMPETENCIA:
             loc
             brclr       BANDERAS,$10,chk_veloc`
@@ -384,6 +398,13 @@ return`
 ; *****************************************************************************
 ;                         MODO_RESUMEN Subroutine
 ; *****************************************************************************
+;Descripcion:
+;  Modo de operación del sensor, en donde  Se despliega la velocidad promedio 
+; de las vueltas detectadas con VelProm en el Modo Competencia, así como la 
+; cantidad de vueltas realizadas. Además se desactivan las interrupciones
+;Salida:
+;      * Bin1, Bin2: Se borran de la pantalla de 7 segmentos al enviarseles $BB
+; *****************************************************************************
 MODO_RESUMEN:
             loc
             brclr       BANDERAS,$10,return`
@@ -401,6 +422,13 @@ return`
             rts
 ; *****************************************************************************
 ;                           MODO_LIBRE Subroutine
+; *****************************************************************************
+;Descripcion:
+;   Modo de operación del sensor, en donde no se realiza calculo u operacion. 
+; Ademas se borran los valores desplegados en la pantallla de 7 segmentos y 
+; deshabilitan interrupciones PTIH
+;Salida:
+;      * Bin1, Bin2: Se borran de la pantalla de 7 segmentos al enviarseles $BB
 ; *****************************************************************************
 MODO_LIBRE:
             loc
@@ -420,6 +448,13 @@ return`
 
 ; *****************************************************************************
 ;                        TAREA_TECLADO Subroutine
+; *****************************************************************************
+;Descripcion:
+;       Subrutina encargada de manejar el teclado matricial.
+;Entrada:
+;      * TECLA_IN: Tecla presionada antes de suprimir los rebotes, se verifica
+;                  que sea igual a TECLA. 
+;      * TECLA:    Tecla presionada en el teclado.
 ; *****************************************************************************
 TAREA_TECLADO:
             tst         Cont_Reb
@@ -455,6 +490,17 @@ RETURN_TT:
          
 ; *****************************************************************************
 ;                        MUX_TECLADO Subroutine
+; *****************************************************************************
+;Descripcion:
+;   Subrutina encargada de capturar el valor presionado en el teclado matricial,
+;  mediante un patron al puerto A, y se detectando la señal de entrada 
+;  correspondiente al valor de una tecla. Se debe considerar que no se utiliza 
+;  la columna 1 conforme a la Tarea 4.
+;Paso de parametros:
+;Entrada:
+;   * TECLAS: Tabla que incluye los valores de cada una de las teclas validas.
+;Salida:
+;   * TECLA: Valor de la tecla presionada.
 ; *****************************************************************************
 MUX_TECLADO:
             clrb
@@ -498,6 +544,18 @@ WR_TECLA:
 
 ; *****************************************************************************
 ;                        FORMAR_ARRAY Subroutine
+; *****************************************************************************
+;Descripcion:
+;   Almacenar los valores del teclado en el arreglo Num_Array cuando los 
+; valores de TECLA_IN y TECLA son iguales. La cantidad maxima de teclas se 
+; define por MAX_TCL, ademas al presionar la tecla enter se guarda el valor,
+; tambien al presionar la tecla B se elimina un valor antes de guardar.
+;Entrada:
+;   * MAX_TCL: Cantidad maxima de teclas en el arreglo.
+;   * TECLA_IN: Valor de la tecla presionada.
+;   * CONT_TCL: tecla actual, puntero
+;Salida:
+;   * NUM_ARRAY: Arreglo donde se guardan los valores.
 ; *****************************************************************************
 FORMAR_ARRAY:
             ldx         #Num_Array
@@ -552,6 +610,16 @@ RETURN_FA
 
 ; *****************************************************************************
 ;                           Cargar_LCD Subrutine
+; *****************************************************************************
+;Descripcion:
+;   Subrutina encargada de enviar la información a desplegar en la pantalla LCD
+;Entrada:
+;   * ADD_L1,ADD_L2: Constantes que representan comandos para añadir lineas.
+;   * D60us,D2ms: Constantes para el tiempo de espera para comunicarse
+;    con la pantalla LED.
+;   * initDisp: Tabla de comandos para iniciar la comunicación con la pantalla
+;   * J: Contiene el puntero de la linea 1
+;   * K: Contiene el puntero de la linea 2           
 ; *****************************************************************************
 CARGAR_LCD: 
             loc
@@ -611,6 +679,9 @@ return`:
 ; Descripcion:
 ;     Se encarga de enviar a la pantalla LCD el dato o comando que 
 ;   recibe conforme al estado de la bandera en BANDERAS_2.0: SEND_DATA.
+;Entrada:
+;   * BANDERAs_2.0: Indica si se envia un comando o datos.
+;   * D240us: Constante con el delay necesario para la pantalla. 
 ; ****************************************************************************
 SEND:       loc
             psha
@@ -650,6 +721,12 @@ clearK2`:
 ; *****************************************************************************
 ;                            Delay Subrutine
 ; *****************************************************************************
+;Descripcion:
+;   Subrutina de atraso, consume el tiempo necesario para la comunicacion con 
+;  la pantalla.               
+;Entrada:
+;       CONT_DELAY: Contador que indica cuanto esperar (1 = 230 us).
+; *****************************************************************************
 Delay:
             tst         Cont_Delay
             bne         Delay
@@ -657,6 +734,17 @@ Delay:
 
 ; *****************************************************************************
 ;                            BCD_7SEG Subrutine
+; *****************************************************************************
+;Descripcion:
+;   Subrutina encargada convertir valores de BCD a los valores necesarios para
+; poder visualizarlos en la pantalla de 7 segmentos.
+;Entrada:
+;   * BC1,BCD2: Valores en bcd a convertir
+;   * SEGMENT: Tabla que contiene los valores para cada uno de los digitos,
+;           guiones y valores en blanco.
+;Salida:
+;   *  DISP1,DISP2,DISP3,DISP4: Valores en 7 segmentos para cada uno de los
+;           displays
 ; *****************************************************************************
 BCD_7SEG:       
             loc
@@ -687,6 +775,14 @@ return`:
 
 ; *****************************************************************************
 ;                        CONV_BIN_BCD Subrutine
+; *****************************************************************************
+;Descrip:
+;   Subrutina de llamado a conversion Binaria a BCD, si el valor se puede
+; convertir o se trata de apagar un digito en la pantalla o mostrar guiones.
+;Entrada:
+;       BIN1,BIN2: Valores a convertir.
+;Salida:
+;       BCD1,BCD2: Valores convertidos.
 ; *****************************************************************************
             loc
 CONV_BIN_BCD:
@@ -752,6 +848,15 @@ chk_special2`
 
 ; *****************************************************************************
 ;                            BCD_BIN Subrutine
+; *****************************************************************************
+;Descrip:
+;   Conversion de BCD a binario, utilizada para convertir el valor del arreglo
+;   del teclado.
+;Entrada:
+;   * NUM_ARRAY: Arreglo de numero en bcd digitados en el teclado.
+;Salida:
+;   * ValorVueltas: Valor en binario resultante de la conversion, 
+;       corresponde al limite de vueltas.    
 ; *****************************************************************************
 ;       BCD_BIN
 BCD_BIN:        
@@ -893,8 +998,17 @@ chk_comp_msg`
 ; *****************************************************************************
 ;                           ATD_ISR Subroutine
 ; *****************************************************************************
-;   Descripcion:
-;        Calcula BRILLO desde el POT
+;Descripcion:
+;    Calcula BRILLO desde el POT con lo cual se controla el brillo del diplay 
+;  de 7 segmentos
+;Entrada:
+;   * ADR00H,ADR01H,...,ADR05H: Registros de datos del convertidor 
+;       analogico-digital        
+;Salida:
+;   * Brillo: variable correspondiente a k en el ciclo de trabajo del control
+;       visto en el algoritmo de los leds y pantalla de 7 segmentos.
+;   * DT: Duty time, variable que determina cuanto tiempo deben permancer los
+;       leds y pantalla de 7 segmentos.
 ; *****************************************************************************
 ATD_ISR:
             ldx         #6
@@ -921,10 +1035,17 @@ ATD_ISR:
 ; *****************************************************************************
 ;                           CALCULAR_ISR Subroutine
 ; *****************************************************************************
-;   Descripcion:
-;
-;   Ecuaciones:
-;    * Veloc = 55 / (TICK_MED * 21.85*10^(-3)) * (3600 / 1000) ,
+;Descripcion:
+;       Calcula la velocidad de los tubos, así como los ticks necesarios
+;   para mostrar y borrar la pantalla.
+;Entrada:
+;   * Cont_Reb: cancela los rebotes de los botones SW2 y SW5 
+;Salida:
+;   * Veloc: Velocidad detectada en Modo Competencia
+;   * VelProm: Promedio de las velocidades anteriores, es igual a Veloc en la 
+;              primera vuelta
+;Ecuaciones:
+;   * Veloc = 55 / (TICK_MED * 21.85*10^(-3)) * (3600 / 1000) ,
 ;    Si 21.85*10^(-3)= 437 / 20000
 ;   => Veloc = 9062/ (TICK_MED) [km/h]
 ;    
@@ -999,6 +1120,15 @@ RETURN`
 ; *****************************************************************************
 ;                           RTI_ISR Subroutine
 ; *****************************************************************************
+;Descripcion:
+;   Subrutina encarga del manejo de los rebotes de los botones     
+;Entrada:
+;   * CONT_REB: se verifica que no sea 0
+;   * Cont_200: constante con la que se compara CONT_RTI
+;   * CONT_RTI: variable con la que se define cuando escribir a ATD0CTL5
+;Salida:
+;   * CONT_REB: si no es cero se decrementa
+; *****************************************************************************
 RTI_ISR:
             loc
             bset        CRGFLG,$80
@@ -1019,6 +1149,20 @@ mov_ATD`
 
 ; *****************************************************************************
 ;                           OC4_ISR Subroutine
+; *****************************************************************************
+;Descripcion:
+;   Subrutina encargada del manejo de la pantalla de 7 segmentos, el contenido
+; de los displays, el brillo y la subrutina bcd 7 segmentos. Ademas decrementa
+; CONT_DELAY, asistiendo al control de la pantalla LED.
+;Entrada:
+;   * DT: determina si se apaga la pantalla, controlando asi el brillo con
+;       el valor obtenido en ATD_ISR.
+;   * DISP1,DISP2,DISP3,DISP4: Contenido que se debe mostrar en el display de
+;       7 segmentos
+;   * LEDS:Variable que determina el patron de los leds
+;Salida:
+;   * CONT_DELAY: contador de retraso para contador de pantalla de LEDS
+;   * CONT_7SEG: contador de retraso para contador de pantalla de 7 segmentos
 ; *****************************************************************************
 OC4_ISR:
             loc
@@ -1114,6 +1258,17 @@ JBCD_7SEG`
 
 ; *****************************************************************************
 ;                           TCNT_ISR Subroutine
+; *****************************************************************************
+;Descripcion:
+;   Interrupcion por overflow del contador de tiempo. Encargada de incrementar
+; los ticks que se usan para medir la velocidad del ciclista, y decrementando 
+; TICK_EN y TICK_DIS para agotar el tiempo que se muestran las velocidades y 
+; vueltas en la pantalla
+;Salida:
+;   * TICK_VEL: Ticks para medir la velocidad, se incrementa cuando el ciclista
+;           se encuentra entre los dos sensores
+;   * TICK_EN: Ticks restantes para activar la velocidad del medidor
+;   * TICK_DIS: Ticks necesarios para eliminar la velocidad del medidor.
 ; *****************************************************************************
 TCNT_ISR:
             loc
