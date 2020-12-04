@@ -373,7 +373,8 @@ PH0:
             movb        #100,CONT_REB
             ldx         TICK_MED                    
             beq         RETURN`
-            bclr        BANDERAS,$20      
+            brclr       BANDERAS_2,$04,RETURN`      
+            bclr        BANDERAS,$04      
             ldd         #9062             
         ; Se divide 9062 / TICK_MED   
             idiv
@@ -419,8 +420,7 @@ PH3:
             bne         RETURN`
             movb        #100,Cont_Reb
             movw        #0,TICK_MED
-            bset        BANDERAS,$20            
-            bset        BANDERAS_2,$02            
+            bset        BANDERAS_2,$06            
 RETURN`
             rti
 
@@ -1298,7 +1298,7 @@ chk_pantflg`
             brset       BANDERAS,$08,chk_comp_msg`
             cmpa        #$BB
             beq         return`
-            bra         init_msg`
+            lbra        init_msg`
 chk_comp_msg`
             cmpa        #$BB
             bne         return`
