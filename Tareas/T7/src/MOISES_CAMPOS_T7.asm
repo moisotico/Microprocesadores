@@ -60,16 +60,17 @@ Dir_RD:         db  $D1
 Dir_Seg:        db  $00
 
             org     $1030
-; Hexadecimal  al ser BCD, El bit 6 de horas se deja abajo porque es en formato 24 H.
-T_WRITE_RTC:    db $45,$59,$08,$02,$04,$12
+; Hexadecimal  al ser BCD.
+;                   seg, min,hora,dia,#dia,mes,a�o
+T_WRITE_RTC:    db $00,$00,$10,$05,$04,$12,$20
             org     $1040
 T_READ_RTC:     ds  6
 
             org     $1050
-T_Acc_Iti:      db $02              ; min, encendido
-                db $00              ; hora, encendido
-                db $05              ; min, apagado
-                db $00              ; hora, apagado
+T_Acc_Iti:      db $01              ; min, encendido
+                db $10              ; hora, encendido
+                db $02              ; min, apagado
+                db $10              ; hora, apagado
                 db %11111111        ; .7 => MODO, .6:0 => Días
 
             
@@ -96,15 +97,23 @@ MSG1:       fcc " POR ITINERARIO "
             org     $2000
         ; Port E relay
             bset        DDRE,$04
+            bclr        PORTE,$04
+        ; PORTA + Pullup resistors     
+            movb        #$F0,DDRA
+            bset        PUCR,$01
         ; Key wakeup PTH
-            bset        PIEH,$0C          
-            bset        PIFH,$0F
+            bset        PIEH,$0D          
+            bset        PPSH,$00
         ; LCD screen
             movb        #$FF,DDRK
         ; 7seg screen
             movb        #$0F,DDRP
             movb        #$0F,PTP
             movb        #$FF,DDRB
+        ; Conf puerto J
+            bset        DDRJ,$02 
+            bset        PTJ,$02
+            
         ; RTI @ 1,027 ms
             movb        #$64,RTICTL       
             bset        CRGINT,$80
@@ -119,6 +128,11 @@ MSG1:       fcc " POR ITINERARIO "
             ldd         TCNT
             addd        #60
             std         TC4
+
+        ;IIC 100 kps, SCL div = 240
+            movb        #$1F,IBFD 
+            movb        #$D0,IBCR
+
         ; Enable masked interruptions
             cli
             lds         #$3BFF
@@ -140,6 +154,7 @@ MSG1:       fcc " POR ITINERARIO "
             clr         LEDS
             movw        #0,CONT_7SEG
             clr         Cont_Delay
+            clr         Index_RTC
             ldx         #T_READ_RTC
             ldaa        #5
 clr_l1`
@@ -149,9 +164,28 @@ clr_l1`
             ldx         #MSG0
             ldy         #MSG1
             jsr         CARGAR_LCD
+            ldx         #T_Acc_Iti
+            ldy         #T_READ_RTC+3
 mainL`
+            ldaa        0,X
+            anda        #$80
+            beq         variable_mode`
+ctrl_l`
             jsr         Control_Luz
             bra         mainL`
+variable_mode`
+            ldab        0,Y
+            cmpb        #7
+l1`
+            beq         m_next`
+            incb
+            rora      
+            bra         l1`  
+m_next`
+            anda        #$01
+            beq         mainL`
+            bra         ctrl_l`   
+
 
 ; *****************************************************************************
 ;                           Control_Luz Subroutine
@@ -160,14 +194,14 @@ Control_Luz:
             loc
         ; apagado a encendido
             ldd         T_Acc_Iti
-            cpd        T_Read_RTC+1       ;Se compara los minutos de encendido con los de memoria
+            cpd         T_Read_RTC+1       ;Se compara los minutos de encendido con los de memoria
             bne         next`
             bclr        BANDERAS,$04
 set_relay`
-            brset       BANDERAS,$10,return`
-            bset        BANDERAS,$10
+            ;brset       BANDERAS,$10,return`
+            ;bset        BANDERAS,$10
         ; Prende la luz
-	        brset       BANDERAS,$04,tlight_off`
+            brset       BANDERAS,$04,tlight_off`
             bset        PORTE,$04
             bra         return`
         ; encendido a apagado
@@ -404,7 +438,7 @@ Read_RTC:
 next0`
             cmpa        #1
             bne         next1`
-        ; Repeate start
+        ; Repeat start
             bset        IBCR,$04       
             movb        Dir_RD,IBDR
             bra         return`
@@ -432,9 +466,7 @@ next3`
             bset        IBCR,$08              
 next4`          
         ; A-3 = > las primeras 3 interrupciones
-            deca
-            deca
-            deca                
+            suba        #3                
             ldx         #T_Read_RTC
         ;Se mueve el dato a la posicion de T_read_RTC
             movb        IBDR,A,X       
@@ -448,7 +480,7 @@ return`
 ; *****************************************************************************
 IIC_ISR:
             loc
-            bset        IBSR,$02
+            bset        IBSR,$20
         ;check CONT_RTI
             brset       BANDERAS,$02,read`
             jsr         WRITE_RTC
