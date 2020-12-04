@@ -66,10 +66,11 @@ T_WRITE_RTC:    db $45,$59,$08,$02,$04,$12
 T_READ_RTC:     ds  6
 
             org     $1050
-T_Acc_Iti:      db $30              ; min, encendido
-                db $10              ; hora, encendido
+T_Acc_Iti:      db $09              ; min, encendido
+                db $00              ; hora, encendido
                 db $50              ; min, apagado
                 db $10              ; hora, apagado
+                db %11111111        ; .7 => MODO, .6:0 => Días
 
             
             org     $1060
@@ -158,23 +159,29 @@ mainL`
 Control_Luz:
             loc
         ; apagado a encendido
-            ldd         T_Acc_Iti 
-            bclr        BANDERAS,$04
+            ldd         T_Acc_Iti
             cmpa        T_Read_RTC+1       ;Se compara los minutos de encendido con los de memoria
-            beq         next`
-        ; encendido a apagado
-            ldd         T_Acc_Iti+2
-            bset        BANDERAS,$04
-            beq         next`
-return`
-            rts
-next`
+            bne         next`
             cmpb        T_Read_RTC+2       ;Se compara las horas con las de memoria
-            bne         return`
-            brset       BANDERAS,$04,tlight_off`
-        ; Prende la luz    
+            bne         next`
+            bclr        BANDERAS,$04
+set_relay`
+            brset       BANDERAS,$10,return`
+            bset        BANDERAS,$10
+        ; Prende la luz
+	    brset       BANDERAS,$04,tlight_off`
             bset        PORTE,$04
             bra         return`
+        ; encendido a apagado
+next`
+            ldd         T_Acc_Iti+2
+            bset        BANDERAS,$04
+            cmpb        T_Read_RTC+1       ;Se compara las horas con las de memoria
+            bne         return`
+            cmpb        T_Read_RTC+2       ;Se compara las horas con las de memoria
+            beq         set_relay`
+return`
+            rts
 tlight_off`
         ; Apaga la luz    
             bclr        PORTE,$04
@@ -319,14 +326,16 @@ Delay:
 ; *****************************************************************************
 BCD_7SEG:       
             loc
+            movb        T_Read_RTC+1,BCD1
+            movb        T_Read_RTC+2,BCD2
             ldx         #SEGMENT
             ldy         #DIG1
             clra
             ldab        BCD1
-            bra set_disps`
-loadBCD2`:
+            bra         set_disps`
+loadBCD2`
             ldab        BCD2
-set_disps`:
+set_disps`
             pshb 
             andb        #$0F
         ; move lower bcd to DIG1 or disp 3
@@ -341,7 +350,14 @@ set_disps`:
         ;check DIG3    
             cpy         #DIG3
             beq         loadBCD2`
-return`:
+            brclr       T_Read_RTC,$01,cln_dots`
+            bset        DIG2,$80
+            bset        DIG3,$80
+            bra         return`
+cln_dots`
+            bclr        DIG2,$80
+            bclr        DIG3,$80
+return`
             rts
 
 
@@ -391,34 +407,40 @@ Read_RTC:
 next0`
             cmpa        #1
             bne         next1`
-            bset        IBCR,$04       ;Repeate start
+        ; Repeate start
+            bset        IBCR,$04       
             movb        Dir_RD,IBDR
             bra         return`
 next1`
             cmpa        #2             ;Tercera?
             bne         next2`
-        ;Borra repeated start, pasa a rx y pone en 0 el ack
+        ; Borra repeated start, pasa a rx y pone en 0 el ack
             bclr        IBCR,$1C       
-        ;Lectura dummy 
+        ; Lectura dummy 
             ldab        IBDR           
             bra         return`
 next2`
-        ;Ultimo
+        ; Ultimo
             cmpa        #9             
             bne         next3`
-            bclr        IBCR,$28       ;borra el no ack (8) y manda señal de stop (2)
-            bset        IBCR,$10       ;pasa a modo tx      
+        ; borra el no ack (8), stop (2)
+            bclr        IBCR,$28       
+        ; Tx
+            bset        IBCR,$10             
             bra         return`
 next3`
             cmpa        #8
             bne         next4`
-            bset        IBCR,$08       ;Pone un no ack       
+        ; Pone un no ack
+            bset        IBCR,$08              
 next4`          
+        ; A-3 = > las primeras 3 interrupciones
             deca
             deca
-            deca                ;A -3 porque se consideran las primeras 3 interrupciones en el index
+            deca                
             ldx         #T_Read_RTC
-            movb        IBDR,A,X       ;Se mueve el dato a la posicion deseada
+        ;Se mueve el dato a la posicion de T_read_RTC
+            movb        IBDR,A,X       
 return`     
             inc         Index_RTC           
             rts
@@ -474,8 +496,8 @@ PTH_ISR:
             bra         RETURN_PTH
 PH0:
             bset        PIFH,$01
-            ;Inicio de comunicaciones, write=0
-            bclr        BANDERAS,$02        
+            ;Inicio de comunicaciones, write=0 , rele_flg
+            bclr        BANDERAS,$12
             ;IBEN=1, IBIE=1 MS=1(START), TX=1, txak=0(9no ciclo)
             movb        #$F0,IBCR                                 
         ;Se envia direccion de escritura    
@@ -519,7 +541,9 @@ RETURN_PTH:
 OC4_ISR:
             loc
             ldaa        CONT_TICKS
-            ldab        DT
+            ldab        #100
+            subb        BRILLO
+            stab        DT
             cba
             bge         apagar`
             tst         CONT_TICKS
