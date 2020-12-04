@@ -66,10 +66,10 @@ T_WRITE_RTC:    db $45,$59,$08,$02,$04,$12
 T_READ_RTC:     ds  6
 
             org     $1050
-T_Acc_Iti:      db $09              ; min, encendido
+T_Acc_Iti:      db $02              ; min, encendido
                 db $00              ; hora, encendido
-                db $50              ; min, apagado
-                db $10              ; hora, apagado
+                db $05              ; min, apagado
+                db $00              ; hora, apagado
                 db %11111111        ; .7 => MODO, .6:0 => Días
 
             
@@ -160,25 +160,22 @@ Control_Luz:
             loc
         ; apagado a encendido
             ldd         T_Acc_Iti
-            cmpa        T_Read_RTC+1       ;Se compara los minutos de encendido con los de memoria
-            bne         next`
-            cmpb        T_Read_RTC+2       ;Se compara las horas con las de memoria
+            cpd        T_Read_RTC+1       ;Se compara los minutos de encendido con los de memoria
             bne         next`
             bclr        BANDERAS,$04
 set_relay`
             brset       BANDERAS,$10,return`
             bset        BANDERAS,$10
         ; Prende la luz
-	    brset       BANDERAS,$04,tlight_off`
+	        brset       BANDERAS,$04,tlight_off`
             bset        PORTE,$04
             bra         return`
         ; encendido a apagado
 next`
             ldd         T_Acc_Iti+2
-            bset        BANDERAS,$04
-            cmpb        T_Read_RTC+1       ;Se compara las horas con las de memoria
+            cpd         T_Read_RTC+1       ;Se compara las horas con las de memoria
             bne         return`
-            cmpb        T_Read_RTC+2       ;Se compara las horas con las de memoria
+            bset        BANDERAS,$04
             beq         set_relay`
 return`
             rts
