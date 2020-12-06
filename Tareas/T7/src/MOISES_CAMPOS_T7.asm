@@ -15,8 +15,8 @@ FIN:            equ $00
 
             org     $1000
 CONT_RTI:       ds  1 
-   ;-- BANDERAS:    7:X, 6:X, 5:X, 4: X,
-   ;                3:X, 2:SendData, 1:Read/Write, 0:TCL_LISTA
+   ;-- BANDERAS:    7:X, 6:X, 5:X, 4: RTC_ON,
+   ;                3:SendData, 2:Light_ON, 1:Read/Write, 0:TCL_LISTA
 BANDERAS:       ds  1
 ; Valor de 0 a 100, controla brillo de 7 seg
 BRILLO:         ds  1
@@ -165,16 +165,16 @@ clr_l1`
             ldy         #MSG1
             jsr         CARGAR_LCD
             ldx         #T_Acc_Iti
-            ldy         #T_READ_RTC+3
+            ldy         #T_READ_RTC
 mainL`
-            ldaa        0,X
+            ldaa        4,X
             anda        #$80
             beq         variable_mode`
 ctrl_l`
             jsr         Control_Luz
             bra         mainL`
 variable_mode`
-            ldab        0,Y
+            ldab        3,Y
             cmpb        #7
 l1`
             beq         m_next`
